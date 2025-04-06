@@ -1,13 +1,22 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Box, Container, CssBaseline, Snackbar, Alert, Paper, Typography, Switch, FormControlLabel } from '@mui/material';
+import { BrowserRouter as Router, Routes, Route, useLocation, Navigate } from 'react-router-dom';
 import ProblemDescription from './components/ProblemDescription';
 import CodeEditor from './components/CodeEditor';
 import TestResults from './components/TestResults';
 import ProblemTemplate from './components/ProblemTemplate';
+import LandingPage from './components/LandingPage';
+import Navbar from './components/Navbar';
 import { TestCase, TestResult, Parameter } from './types';
 import axios from 'axios';
 
-function App() {
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+const LOGGING_URL = process.env.REACT_APP_LOGGING_URL || 'http://localhost:5001';
+const ENABLE_LOGGING = process.env.REACT_APP_ENABLE_LOGGING === 'true';
+
+// Coding Environment Component
+const CodingEnvironment: React.FC = () => {
+  const location = useLocation();
   const [code, setCode] = useState<string>(`def solve(nums: List[int]) -> int:
     # Your code here
     pass`);
@@ -25,7 +34,7 @@ function App() {
   const startY = useRef(0);
   const startHeight = useRef(0);
   const isVerticalResizing = useRef(false);
-  const [isInterviewer, setIsInterviewer] = useState(false);
+  const [isInterviewer, setIsInterviewer] = useState(location.state?.isInterviewer || false);
   const testResultsRef = useRef<{ handleUpdateTestUI: (params: Parameter[], returnType: string) => void; } | null>(null);
   const [problemStatement, setProblemStatement] = useState<string>(`Given an array of integers nums, find the maximum sum of any contiguous subarray.
 
@@ -111,100 +120,50 @@ Explanation: [4,-1,2,1] has the largest sum = 6.`);
     }
   };
 
-  const runCode = async () => {
-    console.log('Running code:', code);
-    console.log('Test cases:', testCases);
-    
-    if (testCases.length === 0) {
-      setError('Please add at least one test case');
-      return;
-    }
-
+  const handleRunCode = async () => {
     setLoading(true);
     setError(null);
     try {
-      // Convert test cases to proper JSON format
-      const processedTestCases = testCases.map(testCase => ({
-        ...testCase,
-        inputs: testCase.inputs.map(input => {
-          if (input === null) return null;
-          try {
-            // If it's already a number or boolean, return as is
-            if (typeof input === 'number' || typeof input === 'boolean') return input;
-            
-            // Try to parse as JSON first (for arrays, objects)
-            try {
-              return JSON.parse(input);
-            } catch {
-              // If it's not valid JSON, try to parse as number
-              const num = Number(input);
-              if (!isNaN(num)) return num;
-              
-              // If not a number, return as string with quotes removed
-              return input.replace(/^["'](.*)["']$/, '$1');
-            }
-          } catch {
-            return input;
-          }
+      const response = await fetch(`${API_URL}/execute`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          code,
+          testCases,
         }),
-        output: testCase.output === null ? null : (() => {
-          try {
-            // If it's already a number or boolean, return as is
-            if (typeof testCase.output === 'number' || typeof testCase.output === 'boolean') 
-              return testCase.output;
-            
-            // Try to parse as JSON first (for arrays, objects)
-            try {
-              return JSON.parse(testCase.output);
-            } catch {
-              // If it's not valid JSON, try to parse as number
-              const num = Number(testCase.output);
-              if (!isNaN(num)) return num;
-              
-              // If not a number, return as string with quotes removed
-              return testCase.output.replace(/^["'](.*)["']$/, '$1');
-            }
-          } catch {
-            return testCase.output;
-          }
-        })()
-      }));
-
-      // Send code execution request
-      console.log('Processed test cases:', processedTestCases);
-      const response = await axios.post('http://localhost:5000/execute', {
-        code,
-        testCases: processedTestCases
       });
-      console.log('Response:', response.data);
-      setTestResults(response.data.results);
-    } catch (err: any) {
-      console.error('Full error:', err);
-      if (err.response?.data?.error) {
-        setError(err.response.data.error);
-      } else if (err.response?.data?.details) {
-        setError(`Error: ${err.response.data.details}`);
-      } else if (err.message) {
-        setError(`Error: ${err.message}`);
-      } else {
-        setError('Error executing code. Please check your code and try again.');
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
+
+      const data = await response.json();
+      setTestResults(data.results);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
       setLoading(false);
     }
   };
 
   const handleKeystrokesLog = async (keystrokes: any[]) => {
+    // Skip logging if disabled
+    if (!ENABLE_LOGGING) {
+      return;
+    }
+    
     try {
       const keystrokeData = {
         session_id: "human_1",
         keystrokes: keystrokes,
-        code: code, // Include the code that was submitted
+        code: code,
         timestamp: new Date().toISOString()
       };
       
       // Send keystroke data to the logging service
-      await axios.post('http://localhost:5001/log_keystrokes', keystrokeData);
+      await axios.post(`${LOGGING_URL}/log_keystrokes`, keystrokeData);
       console.log('Keystrokes logged successfully');
     } catch (error) {
       console.error('Error logging keystrokes:', error);
@@ -224,53 +183,10 @@ Explanation: [4,-1,2,1] has the largest sum = 6.`);
       bgcolor: '#1E1E1E'  // Dark theme background
     }}>
       <CssBaseline />
-      <Box sx={{ 
-        bgcolor: '#2D2D2D', 
-        color: 'white', 
-        py: 1.5, 
-        borderBottom: '1px solid #404040',
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        px: 3
-      }}>
-        <Typography 
-          variant="h6" 
-          component="h1" 
-          sx={{ 
-            fontSize: '1.1rem',
-            fontWeight: 400,
-            fontFamily: 'Consolas, Monaco, monospace'
-          }}
-        >
-          Python Coding Environment
-        </Typography>
-        <FormControlLabel
-          control={
-            <Switch
-              checked={isInterviewer}
-              onChange={(e) => setIsInterviewer(e.target.checked)}
-              size="small"
-              sx={{
-                '& .MuiSwitch-track': {
-                  bgcolor: '#404040'
-                },
-                '& .MuiSwitch-thumb': {
-                  bgcolor: isInterviewer ? '#4CAF50' : '#808080'
-                }
-              }}
-            />
-          }
-          label="Interviewer Mode"
-          sx={{ 
-            color: '#CCCCCC',
-            '& .MuiFormControlLabel-label': {
-              fontSize: '0.9rem',
-              fontFamily: 'Consolas, Monaco, monospace'
-            }
-          }}
-        />
-      </Box>
+      <Navbar 
+        isInterviewer={isInterviewer} 
+        onInterviewerChange={setIsInterviewer} 
+      />
       <Box
        sx={{ 
         display: 'flex', 
@@ -278,7 +194,9 @@ Explanation: [4,-1,2,1] has the largest sum = 6.`);
         overflow: 'hidden',
         gap: 1,
         p: 1,
-        bgcolor: '#1E1E1E'
+        bgcolor: '#1E1E1E',
+        height: 'calc(100vh - 64px)', // Subtract navbar height
+        boxSizing: 'border-box'
       }}>
         <Box
          sx={{ 
@@ -367,7 +285,7 @@ Explanation: [4,-1,2,1] has the largest sum = 6.`);
             <CodeEditor
               code={code}
               onCodeChange={handleCodeChange}
-              onRunCode={runCode}
+              onRunCode={handleRunCode}
               loading={loading}
               onKeystrokesLog={handleKeystrokesLog}
             />
@@ -385,6 +303,8 @@ Explanation: [4,-1,2,1] has the largest sum = 6.`);
               onAddTestCase={handleAddTestCase}
               onUpdateTestCase={handleUpdateTestCase}
               onDeleteTestCase={handleDeleteTestCase}
+              loading={loading}
+              isInterviewer={isInterviewer}
             />
           </Box>
         </Box>
@@ -411,6 +331,19 @@ Explanation: [4,-1,2,1] has the largest sum = 6.`);
         </Alert>
       </Snackbar>
     </Box>
+  );
+};
+
+// Main App Component
+function App() {
+  return (
+    <Router>
+      <Routes>
+        <Route path="/" element={<LandingPage />} />
+        <Route path="/coding-environment" element={<CodingEnvironment />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </Router>
   );
 }
 

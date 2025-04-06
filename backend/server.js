@@ -4,13 +4,14 @@ const cors = require('cors');
 const bodyParser = require('body-parser');
 const fs = require('fs');
 const path = require('path');
+require('dotenv').config();
 
 const app = express();
 const port = process.env.PORT || 5000;
 
 // Configure CORS
 app.use(cors({
-  origin: 'http://localhost:3000', // Frontend URL
+  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
   methods: ['GET', 'POST'],
   allowedHeaders: ['Content-Type']
 }));
@@ -77,7 +78,8 @@ print(json.dumps(results))
   console.log('Wrote Python code to:', tempFilePath);
 
   // Execute the Python code
-  exec(`python "${tempFilePath}"`, (error, stdout, stderr) => {
+  const pythonCommand = process.env.PYTHON_PATH || 'python';
+  exec(`${pythonCommand} "${tempFilePath}"`, (error, stdout, stderr) => {
     console.log('Python stdout:', stdout);
     console.log('Python stderr:', stderr);
     
@@ -129,5 +131,5 @@ app.post('/execute', (req, res) => {
 });
 
 app.listen(port, () => {
-  console.log(`Server running on port ${port}`);
+  console.log(`Server running on port ${port} in ${process.env.NODE_ENV || 'development'} mode`);
 }); 

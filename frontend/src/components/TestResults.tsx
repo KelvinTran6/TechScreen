@@ -7,17 +7,18 @@ import CancelIcon from '@mui/icons-material/Cancel';
 import { TestCase, TestResult, Parameter } from '../types';
 import { currentLanguageConfig } from '../utils/languageUtils';
 
-interface TestResultsProps {
+export interface TestResultsProps {
   testCases: TestCase[];
   results: TestResult[];
   onAddTestCase: (testCase: TestCase) => void;
   onUpdateTestCase: (index: number, testCase: TestCase) => void;
   onDeleteTestCase: (index: number) => void;
-  loading?: boolean;
+  loading: boolean;
+  isInterviewer: boolean;
 }
 
-interface TestResultsRef {
-  handleUpdateTestUI: (params: Parameter[], retType: string) => void;
+export interface TestResultsRef {
+  handleUpdateTestUI: (params: Parameter[], returnType: string) => void;
 }
 
 const TestCaseTab: React.FC<{
@@ -267,8 +268,15 @@ const ResultsTab: React.FC<{
   );
 };
 
-const TestResults = forwardRef<TestResultsRef, TestResultsProps>((props, ref) => {
-  const { testCases, results, onAddTestCase, onUpdateTestCase, onDeleteTestCase, loading } = props;
+const TestResults = forwardRef<TestResultsRef, TestResultsProps>(({
+  testCases,
+  results,
+  onAddTestCase,
+  onUpdateTestCase,
+  onDeleteTestCase,
+  loading,
+  isInterviewer
+}, ref) => {
   const [parameters, setParameters] = useState<Parameter[]>([]);
   const [returnType, setReturnType] = useState<string>('');
   const [activeTab, setActiveTab] = useState<number>(0);
@@ -433,30 +441,23 @@ const TestResults = forwardRef<TestResultsRef, TestResultsProps>((props, ref) =>
             }
           />
         </Tabs>
-        <Button
-          startIcon={<AddIcon />}
-          onClick={handleAddTestCase}
-          variant="outlined"
-          sx={{ 
-            mx: 1,
-            color: parameters.length === 0 ? '#808080' : '#4CAF50',
-            borderColor: parameters.length === 0 ? '#404040' : '#4CAF50',
-            '&.Mui-disabled': {
-              color: '#808080',
-              borderColor: '#404040'
-            },
-            textTransform: 'none',
-            fontFamily: 'Consolas, Monaco, monospace',
-            fontSize: '0.9rem',
-            '&:hover': {
-              backgroundColor: 'rgba(76, 175, 80, 0.08)',
-              borderColor: parameters.length === 0 ? '#404040' : '#4CAF50'
-            }
-          }}
-          disabled={parameters.length === 0}
-        >
-          {parameters.length === 0 ? 'Parse Function First' : 'Add Test Case'}
-        </Button>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <Button
+            variant="contained"
+            onClick={handleAddTestCase}
+            sx={{
+              bgcolor: '#4CAF50',
+              '&:hover': {
+                bgcolor: '#3E8E41',
+              },
+              fontSize: '0.9rem',
+              py: 0.5,
+              px: 2,
+            }}
+          >
+            Add Test Case
+          </Button>
+        </Box>
       </Box>
       <Box sx={{ flex: 1, overflow: 'auto', bgcolor: '#1E1E1E' }}>
         {testCases.length === 0 ? (
