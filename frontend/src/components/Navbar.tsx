@@ -1,101 +1,117 @@
-import React from 'react';
-import { Box, Typography, Button, FormControlLabel, Switch } from '@mui/material';
-import { useNavigate, useLocation } from 'react-router-dom';
+import React, { useState } from 'react';
+import { Box, Typography, Button, Snackbar, Alert, Tooltip } from '@mui/material';
+import { useNavigate, useParams } from 'react-router-dom';
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 
 interface NavbarProps {
   isInterviewer?: boolean;
-  onInterviewerChange?: (isInterviewer: boolean) => void;
 }
 
-const Navbar: React.FC<NavbarProps> = ({ isInterviewer, onInterviewerChange }) => {
+const Navbar: React.FC<NavbarProps> = ({ isInterviewer }) => {
   const navigate = useNavigate();
-  const location = useLocation();
-  const isLandingPage = location.pathname === '/';
+  const { sessionId } = useParams<{ sessionId: string }>();
+  const isLandingPage = window.location.pathname === '/';
+  const [showCopiedMessage, setShowCopiedMessage] = useState(false);
 
-  const handleLogoClick = () => {
+  const handleTitleClick = () => {
     navigate('/');
   };
 
-  const handleStartInterview = () => {
-    navigate('/coding-environment', { state: { isInterviewer: true } });
+  const handleCopySessionUrl = () => {
+    if (sessionId) {
+      const sessionUrl = `${window.location.origin}/session/${sessionId}`;
+      navigator.clipboard.writeText(sessionUrl)
+        .then(() => {
+          setShowCopiedMessage(true);
+        })
+        .catch(err => {
+          console.error('Failed to copy URL:', err);
+        });
+    }
+  };
+
+  const handleCloseSnackbar = () => {
+    setShowCopiedMessage(false);
   };
 
   return (
     <Box
       sx={{
-        bgcolor: '#2D2D2D',
-        py: 2,
-        borderBottom: '1px solid #404040',
         display: 'flex',
-        justifyContent: 'space-between',
         alignItems: 'center',
-        px: 3,
+        justifyContent: 'space-between',
+        p: 2,
+        bgcolor: '#252526',
+        borderBottom: '1px solid #404040',
         height: '64px',
         boxSizing: 'border-box',
         flexShrink: 0,
       }}
     >
       <Typography
-        variant="h5"
-        component="h1"
-        onClick={handleLogoClick}
+        variant="h6"
+        component="div"
         sx={{
-          fontFamily: 'Consolas, Monaco, monospace',
-          fontWeight: 600,
-          color: '#4CAF50',
-          fontSize: '1.25rem',
           cursor: 'pointer',
+          color: '#FFFFFF',
+          fontFamily: 'Consolas, Monaco, monospace',
+          fontWeight: 700,
           '&:hover': {
-            opacity: 0.8,
+            color: '#4CAF50',
           },
         }}
+        onClick={handleTitleClick}
       >
         TechScreen
       </Typography>
-      
+
       {isLandingPage ? (
         <Button
-          variant="outlined"
+          variant="contained"
           color="primary"
+          onClick={() => navigate('/session/new')}
           sx={{
-            borderColor: '#4CAF50',
-            color: '#4CAF50',
+            bgcolor: '#4CAF50',
             '&:hover': {
-              borderColor: '#4CAF50',
-              bgcolor: 'rgba(76, 175, 80, 0.1)',
+              bgcolor: '#3E8E41',
             },
           }}
-          onClick={handleStartInterview}
         >
           Start Interview
         </Button>
       ) : (
-        <FormControlLabel
-          control={
-            <Switch
-              checked={isInterviewer}
-              onChange={(e) => onInterviewerChange && onInterviewerChange(e.target.checked)}
-              size="small"
+        isInterviewer && (
+          <Tooltip title="Copy session URL to share with candidate">
+            <Button
+              variant="outlined"
+              color="primary"
+              onClick={handleCopySessionUrl}
+              startIcon={<ContentCopyIcon />}
               sx={{
-                '& .MuiSwitch-track': {
-                  bgcolor: '#404040'
+                color: '#FFFFFF',
+                borderColor: '#4CAF50',
+                '&:hover': {
+                  borderColor: '#3E8E41',
+                  backgroundColor: 'rgba(76, 175, 80, 0.08)',
                 },
-                '& .MuiSwitch-thumb': {
-                  bgcolor: isInterviewer ? '#4CAF50' : '#808080'
-                }
               }}
-            />
-          }
-          label="Interviewer Mode"
-          sx={{ 
-            color: '#CCCCCC',
-            '& .MuiFormControlLabel-label': {
-              fontSize: '0.9rem',
-              fontFamily: 'Consolas, Monaco, monospace'
-            }
-          }}
-        />
+            >
+              Copy Session URL
+            </Button>
+          </Tooltip>
+        )
       )}
+
+      <Snackbar
+        open={showCopiedMessage}
+        autoHideDuration={3000}
+        onClose={handleCloseSnackbar}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert onClose={handleCloseSnackbar} severity="success" sx={{ width: '100%' }}>
+          Session URL copied to clipboard!
+        </Alert>
+      </Snackbar>
     </Box>
   );
 };

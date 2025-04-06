@@ -89,7 +89,7 @@ const TestCaseTab: React.FC<{
               label={`${param.name} (${param.type})`}
               value={inputs[idx] || ''}
               onChange={(e) => handleInputChange(idx, e.target.value)}
-              placeholder={`Example: ${param.example}`}
+              placeholder={param.example ? `Example: ${param.example}` : ''}
               size="small"
               sx={{
                 '& .MuiInputBase-root': {
@@ -302,6 +302,7 @@ const TestResults = forwardRef<TestResultsRef, TestResultsProps>(({
       // If no test cases exist, create a sample test case
       if (testCases.length === 0) {
         const sampleInputs = params.map(param => {
+          if (!param.example) return '';
           try {
             return JSON.parse(param.example);
           } catch {
