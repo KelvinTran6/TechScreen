@@ -38,7 +38,7 @@ const CodingEnvironmentWrapper: React.FC = () => {
 
   // Handle direct navigation to a session URL
   useEffect(() => {
-    if (!socket || !urlSessionId) return;
+    if (!urlSessionId) return;
     
     // If we're already in this session, no need to join again
     if (sessionId === urlSessionId) {
@@ -54,6 +54,14 @@ const CodingEnvironmentWrapper: React.FC = () => {
     
     // Join the session
     joinSession(urlSessionId, userRole);
+    
+    // If WebSocket is not available, the joinSession function will simulate joining
+    // and set the sessionId and role directly
+    if (!socket) {
+      setSessionConfirmed(true);
+      setIsJoining(false);
+      return;
+    }
     
     // Listen for session state event
     const handleSessionState = (state: SessionState) => {
@@ -81,7 +89,7 @@ const CodingEnvironmentWrapper: React.FC = () => {
       socket.off('session_state', handleSessionState);
       socket.off('session_error', handleSessionError);
     };
-  }, [socket, urlSessionId, sessionId, navigate, joinSession]);
+  }, [socket, urlSessionId, sessionId, joinSession, navigate]);
 
   // Handle session errors
   useEffect(() => {

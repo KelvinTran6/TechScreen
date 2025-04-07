@@ -9,6 +9,7 @@ A real-time collaborative coding interview platform.
 - Real-time collaboration between interviewer and interviewee
 - Modern, responsive UI
 - Dark theme optimized for coding
+- Cheat detection service
 
 ## WebSocket Implementation
 
@@ -65,6 +66,7 @@ The WebSocket client (`frontend/src/contexts/WebSocketContext.tsx`) provides:
 ### Frontend
 - `REACT_APP_API_URL`: Backend API URL (default: http://localhost:5000)
 - `REACT_APP_WS_URL`: WebSocket server URL (default: http://localhost:5000)
+- `REACT_APP_CHEAT_DETECTION_URL`: Cheat detection service URL (default: http://localhost:5001)
 
 ## Session Management
 
@@ -97,13 +99,18 @@ techscreen/
 │   ├── websocket.js        # WebSocket server implementation
 │   ├── pythonRunner.js     # Python code execution
 │   └── types.js            # Shared type definitions
-└── frontend/
-    ├── src/
-    │   ├── components/     # React components
-    │   ├── contexts/       # React contexts
-    │   ├── types.ts        # TypeScript type definitions
-    │   └── App.tsx         # Main application component
-    └── package.json        # Frontend dependencies
+├── frontend/
+│   ├── src/
+│   │   ├── components/     # React components
+│   │   ├── contexts/       # React contexts
+│   │   ├── types.ts        # TypeScript type definitions
+│   │   └── App.tsx         # Main application component
+│   └── package.json        # Frontend dependencies
+└── cheat_detection_service/
+    ├── app.py              # Flask application
+    ├── cheat_detector.py   # Cheat detection logic
+    ├── requirements.txt    # Python dependencies
+    └── run.bat/run.sh      # Scripts to run the service
 ```
 
 ### Adding New Features
@@ -123,3 +130,75 @@ techscreen/
 ## License
 
 MIT 
+
+## Cheat Detection Service
+
+The project includes a separate Python service for detecting potential cheating in candidate code. This service is located in the `cheat_detection_service` directory.
+
+### Features
+
+- Simple API for checking code for potential cheating
+- Hot reloading for development (automatically restarts when code changes)
+- Health check endpoint
+
+### Running the Cheat Detection Service
+
+#### Windows
+```
+cd cheat_detection_service
+run.bat
+```
+
+#### macOS/Linux
+```
+cd cheat_detection_service
+./run.sh
+```
+
+The scripts will automatically:
+1. Create a virtual environment if it doesn't exist
+2. Activate the virtual environment
+3. Install all required dependencies
+4. Start the service with hot reloading
+
+The service will automatically restart when you make changes to any Python file in the service directory.
+
+### API Endpoints
+
+#### Check Code for Cheating
+
+**Endpoint:** `http://localhost:5001/check-code`
+
+**Method:** POST
+
+**Request Body:**
+```json
+{
+  "problem_statement": "The problem statement text",
+  "candidate_code": "The candidate's code",
+  "language": "python"
+}
+```
+
+**Response:**
+```json
+{
+  "is_cheating": false,
+  "confidence": 0.0,
+  "explanation": "No obvious signs of cheating detected.",
+  "suspicious_patterns": []
+}
+```
+
+#### Health Check
+
+**Endpoint:** `http://localhost:5001/health`
+
+**Method:** GET
+
+**Response:**
+```json
+{
+  "status": "ok"
+}
+``` 

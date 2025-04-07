@@ -58,13 +58,65 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
   // Initialize socket connection
   useEffect(() => {
+    // Check if we're in a session URL
+    const path = window.location.pathname;
+    const sessionMatch = path.match(/\/session\/([^\/]+)/);
+    const sessionIdFromUrl = sessionMatch ? sessionMatch[1] : null;
+    
+    // If we're in a session URL but not connected to a WebSocket server,
+    // we'll simulate a session state
+    if (sessionIdFromUrl && !socket) {
+      console.log('Simulating session state for URL session:', sessionIdFromUrl);
+      
+      // Determine role based on URL
+      const isInterviewer = path.includes('/interview/');
+      const role = isInterviewer ? 'interviewer' : 'interviewee';
+      
+      // Set session state
+      setSessionId(sessionIdFromUrl);
+      setRole(role);
+      setSessionState({
+        code: '',
+        testCases: [],
+        problemStatement: '',
+      });
+      
+      return;
+    }
+    
     const newSocket = io(process.env.REACT_APP_WS_URL || 'http://localhost:5000', {
       transports: ['websocket'],
+      reconnection: true,
+      reconnectionAttempts: 5,
+      reconnectionDelay: 1000,
     });
 
     newSocket.on('connect', () => {
       setIsConnected(true);
       setSessionError(null);
+    });
+
+    newSocket.on('connect_error', (error) => {
+      console.log('WebSocket connection error:', error);
+      setSessionError('Could not connect to the server. Using fallback mode.');
+      
+      // If we're in a session URL, simulate a session state
+      if (sessionIdFromUrl) {
+        console.log('Simulating session state for URL session:', sessionIdFromUrl);
+        
+        // Determine role based on URL
+        const isInterviewer = path.includes('/interview/');
+        const role = isInterviewer ? 'interviewer' : 'interviewee';
+        
+        // Set session state
+        setSessionId(sessionIdFromUrl);
+        setRole(role);
+        setSessionState({
+          code: '',
+          testCases: [],
+          problemStatement: '',
+        });
+      }
     });
 
     newSocket.on('disconnect', () => {
@@ -127,6 +179,17 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       setPendingSessionId(sessionId);
       setPendingRole(role);
       socket.emit('join_session', { sessionId, role });
+    } else {
+      // If WebSocket is not available, simulate joining the session
+      console.log(`Simulating join session: ${sessionId} as ${role}`);
+      setSessionError(null);
+      setSessionId(sessionId);
+      setRole(role);
+      setSessionState({
+        code: '',
+        testCases: [],
+        problemStatement: '',
+      });
     }
   };
 

@@ -198,9 +198,7 @@ Explanation: [4,-1,2,1] has the largest sum = 6.`);
     }
   };
 
-  const handleRunCode = async () => {
-    setLoading(true);
-    setError(null);
+  const executeCode = async () => {
     try {
       const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/execute`, {
         method: 'POST',
@@ -219,6 +217,55 @@ Explanation: [4,-1,2,1] has the largest sum = 6.`);
 
       const data = await response.json();
       setTestResults(data.results);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred');
+    }
+  };
+
+  const checkForCheating = async () => {
+    try {
+      const url = `${process.env.REACT_APP_CHEAT_DETECTION_URL || 'http://localhost:5001'}/check-code`;
+      console.log('Making request to:', url);
+      console.log('With payload:', {
+        problem_statement: problemStatement || 'Default problem statement',
+        candidate_code: code || '',
+        language: 'python'
+      });
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify({
+          problem_statement: problemStatement || 'Default problem statement',
+          candidate_code: code || '',
+          language: 'python'
+        }),
+      });
+
+      console.log('Response status:', response.status);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log('Response data:', data);
+      return data;
+    } catch (err) {
+      console.error('Error checking code for cheating:', err);
+      throw err;
+    }
+  };
+
+  const handleRunCode = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      await executeCode();
+      const cheatResult = await checkForCheating();
+      console.log('Cheat detection result:', cheatResult);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
