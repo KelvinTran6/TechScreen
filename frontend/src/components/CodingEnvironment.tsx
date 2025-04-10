@@ -6,6 +6,7 @@ import ProblemDescription from './ProblemDescription';
 import CodeEditor from './CodeEditor';
 import TestResults from './TestResults';
 import ProblemTemplate from './ProblemTemplate';
+import CandidateActivityOverlay from './CandidateActivityOverlay';
 import { TestCase, TestResult, Parameter } from '../types';
 
 interface CodingEnvironmentProps {
@@ -42,6 +43,262 @@ const CodingEnvironment: React.FC<CodingEnvironmentProps> = ({
   const testResultsRef = useRef<{ handleUpdateTestUI: (params: Parameter[], returnType: string) => void; } | null>(null);
   const [problemStatement, setProblemStatement] = useState<string>('');
   const [isInitialized, setIsInitialized] = useState(false);
+  const [candidateActivities, setCandidateActivities] = useState<Array<{
+    id: string;
+    type: 'keypress' | 'mouseclick';
+    key?: string;
+    x?: number;
+    y?: number;
+    target?: string;
+    button?: number;
+    timestamp: string;
+    ctrlKey?: boolean;
+    altKey?: boolean;
+    shiftKey?: boolean;
+    metaKey?: boolean;
+    isHighlighted?: boolean;
+  }>>([]);
+  const globalTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Define key combinations to highlight
+  const highlightedKeyCombos: Array<{
+    key: string;
+    ctrlKey?: boolean;
+    altKey?: boolean;
+    shiftKey?: boolean;
+    metaKey?: boolean;
+  }> = [
+    { key: 'b', ctrlKey: true },
+    { key: 'Enter', ctrlKey: true },
+    { key: 'h', ctrlKey: true },
+    { key: 'g', ctrlKey: true },
+    { key: 'F4', altKey: true },
+    { key: 'ArrowUp', ctrlKey: true },
+    { key: 'ArrowDown', ctrlKey: true },
+    { key: 'ArrowLeft', ctrlKey: true },
+    { key: 'ArrowRight', ctrlKey: true },
+    { key: 'a', ctrlKey: true }, // Ctrl+A (Select All)
+    { key: 'c', ctrlKey: true }, // Ctrl+C (Copy)
+    { key: 'v', ctrlKey: true }, // Ctrl+V (Paste)
+    { key: 'x', ctrlKey: true }, // Ctrl+X (Cut)
+    { key: 'z', ctrlKey: true }, // Ctrl+Z (Undo)
+    { key: 'y', ctrlKey: true }, // Ctrl+Y (Redo)
+    { key: 'f', ctrlKey: true }, // Ctrl+F (Find)
+    { key: 'p', ctrlKey: true }, // Ctrl+P (Print)
+    { key: 's', ctrlKey: true }, // Ctrl+S (Save)
+    { key: 'r', ctrlKey: true }, // Ctrl+R (Refresh)
+    { key: 'l', ctrlKey: true }, // Ctrl+L (Focus URL bar)
+    { key: 't', ctrlKey: true }, // Ctrl+T (New tab)
+    { key: 'w', ctrlKey: true }, // Ctrl+W (Close tab)
+    { key: 'Tab', ctrlKey: true }, // Ctrl+Tab (Switch tabs)
+    { key: 'Home', ctrlKey: true }, // Ctrl+Home (Go to beginning)
+    { key: 'End', ctrlKey: true }, // Ctrl+End (Go to end)
+    { key: 'PageUp', ctrlKey: true }, // Ctrl+PageUp (Previous tab)
+    { key: 'PageDown', ctrlKey: true }, // Ctrl+PageDown (Next tab)
+    { key: 'Insert', ctrlKey: true }, // Ctrl+Insert (Copy)
+    { key: 'Delete', ctrlKey: true }, // Ctrl+Delete (Delete word)
+    { key: 'Backspace', ctrlKey: true }, // Ctrl+Backspace (Delete word)
+  ];
+
+  // Add keyboard event listener for non-interviewers
+  useEffect(() => {
+    if (!isInterviewer && socket) {
+      // Create a debounce map to track recently sent key combinations
+      const recentlySentKeys = new Map<string, number>();
+      const DEBOUNCE_TIME = 300; // milliseconds
+      
+      const handleKeyDown = (e: KeyboardEvent) => {
+        console.log('Key pressed:', e.key, 'Ctrl:', e.ctrlKey, 'Alt:', e.altKey, 'Shift:', e.shiftKey, 'Meta:', e.metaKey);
+        
+        // Check if this is a highlighted key combination
+        const isHighlighted = highlightedKeyCombos.some(combo => 
+          combo.key === e.key && 
+          (combo.ctrlKey === undefined || combo.ctrlKey === e.ctrlKey) &&
+          (combo.altKey === undefined || combo.altKey === e.altKey) &&
+          (combo.shiftKey === undefined || combo.shiftKey === e.shiftKey) &&
+          (combo.metaKey === undefined || combo.metaKey === e.metaKey)
+        );
+        
+        // Skip regular typing (single character keys without modifiers)
+        const isRegularTyping = e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.shiftKey && !e.metaKey;
+        
+        // Only send special keys or keyboard shortcuts
+        if (!isRegularTyping || isHighlighted) {
+          // For highlighted key combinations, prevent the default behavior
+          if (isHighlighted) {
+            e.preventDefault();
+            console.log('Prevented default behavior for key combination:', e.key, 'Ctrl:', e.ctrlKey);
+          }
+          
+          // Create a unique key for this combination
+          const keyCombo = `${e.key}-${e.ctrlKey ? 'ctrl' : ''}-${e.altKey ? 'alt' : ''}-${e.shiftKey ? 'shift' : ''}-${e.metaKey ? 'meta' : ''}`;
+          
+          // Check if this key combination was recently sent
+          const lastSentTime = recentlySentKeys.get(keyCombo);
+          const currentTime = Date.now();
+          
+          if (!lastSentTime || currentTime - lastSentTime > DEBOUNCE_TIME) {
+            // Update the last sent time
+            recentlySentKeys.set(keyCombo, currentTime);
+            
+            // Send keystroke to interviewer through socket
+            socket.emit('candidate_activity', {
+              sessionId,
+              type: 'keypress',
+              key: e.key,
+              ctrlKey: e.ctrlKey,
+              altKey: e.altKey,
+              shiftKey: e.shiftKey,
+              metaKey: e.metaKey,
+              isHighlighted,
+              timestamp: new Date().toISOString()
+            });
+            
+            console.log('Sent key combination:', keyCombo);
+          } else {
+            console.log('Debounced key combination:', keyCombo);
+          }
+        }
+      };
+
+      // Add event listeners at multiple levels with highest priority
+      // 1. Window level with capture phase
+      window.addEventListener('keydown', handleKeyDown, { capture: true, passive: false });
+      
+      // 2. Document level with capture phase
+      document.addEventListener('keydown', handleKeyDown, { capture: true, passive: false });
+      
+      // 3. Document body with capture phase
+      document.body.addEventListener('keydown', handleKeyDown, { capture: true, passive: false });
+
+      const handleMouseClick = (e: MouseEvent) => {
+        console.log('Mouse clicked:', {
+          x: e.clientX,
+          y: e.clientY,
+          button: e.button,
+          target: (e.target as HTMLElement).tagName
+        });
+        // Send mouse click to interviewer through socket
+        socket.emit('candidate_activity', {
+          sessionId,
+          type: 'mouseclick',
+          x: e.clientX,
+          y: e.clientY,
+          button: e.button,
+          target: (e.target as HTMLElement).tagName,
+          timestamp: new Date().toISOString()
+        });
+      };
+
+      // Add event listeners
+      window.addEventListener('click', handleMouseClick);
+
+      // Clean up event listeners
+      return () => {
+        window.removeEventListener('keydown', handleKeyDown, { capture: true });
+        document.removeEventListener('keydown', handleKeyDown, { capture: true });
+        document.body.removeEventListener('keydown', handleKeyDown, { capture: true });
+        window.removeEventListener('click', handleMouseClick);
+      };
+    }
+  }, [isInterviewer, socket, sessionId, highlightedKeyCombos]);
+
+  // Add socket listener for candidate activity (interviewer only)
+  useEffect(() => {
+    if (isInterviewer && socket) {
+      console.log('Setting up candidate activity listener for interviewer');
+      
+      const handleCandidateActivity = (data: any) => {
+        console.log('Received candidate activity data:', data);
+        
+        // Check if the activity is for this session
+        // If sessionId is missing, assume it's for the current session
+        if (!data.sessionId || data.sessionId === sessionId) {
+          console.log('Activity matches current session:', sessionId);
+          
+          if (data.type === 'keypress') {
+            console.log(`Candidate pressed key: ${data.key} at ${new Date(data.timestamp).toLocaleTimeString()}`);
+            
+            // Add the activity to the state
+            const activityId = `key-${Date.now()}`;
+            setCandidateActivities(prev => {
+              // Keep only the 5 most recent activities
+              const recentActivities = prev.slice(-4); // Keep 4 to make room for the new one
+              
+              return [...recentActivities, {
+                id: activityId,
+                type: 'keypress',
+                key: data.key,
+                ctrlKey: data.ctrlKey,
+                altKey: data.altKey,
+                shiftKey: data.shiftKey,
+                metaKey: data.metaKey,
+                isHighlighted: data.isHighlighted,
+                timestamp: data.timestamp
+              }];
+            });
+            
+            // Reset the global timer whenever a new activity is added
+            if (globalTimerRef.current) {
+              clearTimeout(globalTimerRef.current);
+            }
+            
+            // Set a new global timer to clear all activities after 2 seconds
+            globalTimerRef.current = setTimeout(() => {
+              setCandidateActivities([]);
+            }, 2000);
+            
+          } else if (data.type === 'mouseclick') {
+            console.log(`Candidate clicked at (${data.x}, ${data.y}) on element ${data.target} at ${new Date(data.timestamp).toLocaleTimeString()}`);
+            
+            // Add the activity to the state
+            const activityId = `mouse-${Date.now()}`;
+            setCandidateActivities(prev => {
+              // Keep only the 5 most recent activities
+              const recentActivities = prev.slice(-4); // Keep 4 to make room for the new one
+              
+              return [...recentActivities, {
+                id: activityId,
+                type: 'mouseclick',
+                x: data.x,
+                y: data.y,
+                target: data.target,
+                button: data.button,
+                timestamp: data.timestamp
+              }];
+            });
+            
+            // Reset the global timer whenever a new activity is added
+            if (globalTimerRef.current) {
+              clearTimeout(globalTimerRef.current);
+            }
+            
+            // Set a new global timer to clear all activities after 2 seconds
+            globalTimerRef.current = setTimeout(() => {
+              setCandidateActivities([]);
+            }, 2000);
+            
+          } else {
+            console.log('Unknown activity type:', data.type);
+          }
+        } else {
+          console.log('Activity for different session:', data.sessionId, 'current session:', sessionId);
+        }
+      };
+
+      socket.on('candidate_activity', handleCandidateActivity);
+      console.log('Candidate activity listener registered');
+
+      return () => {
+        socket.off('candidate_activity', handleCandidateActivity);
+        console.log('Candidate activity listener removed');
+        // Clear the global timer when the component unmounts
+        if (globalTimerRef.current) {
+          clearTimeout(globalTimerRef.current);
+        }
+      };
+    }
+  }, [isInterviewer, socket, sessionId]);
 
   useEffect(() => {
     const handleResize = () => {
@@ -264,8 +521,8 @@ Explanation: [4,-1,2,1] has the largest sum = 6.`);
     setError(null);
     try {
       await executeCode();
-      const cheatResult = await checkForCheating();
-      console.log('Cheat detection result:', cheatResult);
+      // const cheatResult = await checkForCheating();
+      // console.log('Cheat detection result:', cheatResult);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
@@ -391,6 +648,7 @@ Explanation: [4,-1,2,1] has the largest sum = 6.`);
               onCodeChange={handleCodeChange}
               onRunCode={handleRunCode}
               loading={loading}
+              sessionId={sessionId}
             />
           </Box>
           <Box sx={{ 
@@ -433,6 +691,16 @@ Explanation: [4,-1,2,1] has the largest sum = 6.`);
           {error}
         </Alert>
       </Snackbar>
+      
+      {/* Candidate Activity Overlay - only visible to interviewers */}
+      {isInterviewer && (
+        <CandidateActivityOverlay 
+          activities={candidateActivities}
+          onActivityExpired={(id) => {
+            setCandidateActivities(prev => prev.filter(activity => activity.id !== id));
+          }}
+        />
+      )}
     </Box>
   );
 };

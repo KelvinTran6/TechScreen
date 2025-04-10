@@ -38,6 +38,10 @@ class WebSocketServer {
         this.handleProblemStatementChange(socket, sessionId, problemStatement);
       });
 
+      socket.on('candidate_activity', ({ sessionId, ...activityData }) => {
+        this.handleCandidateActivity(socket, sessionId, activityData);
+      });
+
       socket.on('disconnect', () => {
         this.handleDisconnect(socket);
       });
@@ -134,6 +138,39 @@ class WebSocketServer {
     if (session) {
       session.problemStatement = problemStatement;
       socket.to(sessionId).emit('problem_statement_updated', { problemStatement });
+    }
+  }
+
+  handleCandidateActivity(socket, sessionId, activityData) {
+    console.log(`Received candidate activity for session ${sessionId}:`, activityData);
+    
+    const session = this.sessions.get(sessionId);
+    if (session) {
+      console.log(`Session ${sessionId} found, forwarding to interviewers`);
+      
+      // We need to make sure we're only sending to interviewers
+      let interviewerCount = 0;
+      for (const [participantId, participant] of session.participants.entries()) {
+        if (participant.role === 'interviewer' && participantId !== socket.id) {
+          // Get the socket for this participant
+          const participantSocket = this.io.sockets.sockets.get(participantId);
+          if (participantSocket) {
+            console.log(`Forwarding activity to interviewer ${participantId}`);
+            // Include the sessionId in the forwarded data
+            participantSocket.emit('candidate_activity', {
+              ...activityData,
+              sessionId
+            });
+            interviewerCount++;
+          } else {
+            console.log(`Interviewer ${participantId} socket not found`);
+          }
+        }
+      }
+      
+      console.log(`Forwarded activity to ${interviewerCount} interviewers`);
+    } else {
+      console.log(`Session ${sessionId} not found`);
     }
   }
 

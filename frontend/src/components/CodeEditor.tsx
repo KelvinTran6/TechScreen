@@ -1,77 +1,44 @@
-import React, { useState, useRef } from 'react';
+import { useRef, useEffect } from 'react';
 import Editor from '@monaco-editor/react';
-import { Box, Button, Paper, Typography } from '@mui/material';
+import { Box, Button, Typography } from '@mui/material';
 import { PlayArrow as PlayArrowIcon } from '@mui/icons-material';
-
-interface KeystrokeData {
-  key: string;
-  key_code: number;
-  keydown_delay: number;
-  keyup_delay: number;
-  is_backspace: number;
-}
+import { useWebSocket } from '../contexts/WebSocketContext';
 
 interface CodeEditorProps {
   code: string;
   onCodeChange: (value: string | undefined) => void;
   onRunCode: () => void;
   loading: boolean;
-  onKeystrokesLog?: (keystrokes: KeystrokeData[]) => void;
+  sessionId: string;
 }
 
-const CodeEditor: React.FC<CodeEditorProps> = ({
+const CodeEditor = ({
   code,
   onCodeChange,
   onRunCode,
   loading,
-  onKeystrokesLog,
-}) => {
-  const [keystrokes, setKeystrokes] = useState<KeystrokeData[]>([]);
-  const lastKeyDownTime = useRef<number>(0);
-  const lastKeyUpTime = useRef<number>(0);
+  sessionId
+}: CodeEditorProps) => {
+  const { sendCodeUpdate, isConnected } = useWebSocket();
+  const lastSentCode = useRef<string>(code);
 
-  const handleRunCode = () => {
-    if (onKeystrokesLog) {
-      onKeystrokesLog(keystrokes);
-      // Clear the keystrokes after logging
-      setKeystrokes([]);
+  // Update lastSentCode when code prop changes
+  useEffect(() => {
+    lastSentCode.current = code;
+  }, [code]);
+
+  const handleCodeChange = (value: string | undefined) => {
+    if (!value) return;
+    
+    // Call the parent's onCodeChange handler
+    onCodeChange(value);
+    
+    // Send code update through WebSocket if connected
+    if (isConnected && value !== lastSentCode.current) {
+      console.log('Sending code update through WebSocket');
+      sendCodeUpdate(sessionId, value);
+      lastSentCode.current = value;
     }
-    onRunCode();
-  };
-
-  const handleEditorDidMount = (editor: any) => {
-    // Add keydown event listener
-    editor.onKeyDown((e: any) => {
-      const currentTime = Date.now();
-      const keydownDelay = lastKeyDownTime.current ? (currentTime - lastKeyDownTime.current) / 1000 : 0;
-      lastKeyDownTime.current = currentTime;
-
-      const newKeystroke: KeystrokeData = {
-        key: e.browserEvent.key,
-        key_code: e.browserEvent.keyCode,
-        keydown_delay: keydownDelay,
-        keyup_delay: 0, // Will be updated on keyup
-        is_backspace: e.browserEvent.key === 'Backspace' ? 1 : 0
-      };
-
-      setKeystrokes(prev => [...prev, newKeystroke]);
-    });
-
-    // Add keyup event listener
-    editor.onKeyUp((e: any) => {
-      const currentTime = Date.now();
-      const keyupDelay = lastKeyUpTime.current ? (currentTime - lastKeyUpTime.current) / 1000 : 0;
-      lastKeyUpTime.current = currentTime;
-
-      setKeystrokes(prev => {
-        if (prev.length > 0) {
-          const lastKeystroke = prev[prev.length - 1];
-          lastKeystroke.keyup_delay = keyupDelay;
-          return [...prev.slice(0, -1), lastKeystroke];
-        }
-        return prev;
-      });
-    });
   };
 
   return (
@@ -93,7 +60,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
         </Typography>
         <Button
           variant="outlined"
-          onClick={handleRunCode}
+          onClick={onRunCode}
           disabled={loading}
           startIcon={<PlayArrowIcon />}
           sx={{ 
@@ -118,18 +85,16 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
         flex: 1, 
         overflow: 'hidden',
         borderRadius: 2,
-        border: '1px solid #e0e0e0',
+        border: '1px solid #404040',
         mx: 2,
-        my: 2,
-        p: 2
+        my: 2
       }}>
         <Editor
           height="100%"
           defaultLanguage="python"
           value={code}
-          onChange={onCodeChange}
+          onChange={handleCodeChange}
           theme="vs-dark"
-          onMount={handleEditorDidMount}
           options={{
             minimap: { enabled: false },
             fontSize: 14,

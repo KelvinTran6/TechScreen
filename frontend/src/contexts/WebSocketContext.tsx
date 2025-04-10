@@ -23,23 +23,16 @@ interface WebSocketContextType {
 }
 
 // Create the context with default values
-const WebSocketContext = createContext<WebSocketContextType>({
-  socket: null,
-  isConnected: false,
-  sessionId: null,
-  role: null,
-  sessionError: null,
-  sessionState: null,
-  joinSession: () => {},
-  leaveSession: () => {},
-  sendCodeUpdate: () => {},
-  sendTestCaseUpdate: () => {},
-  sendProblemStatementUpdate: () => {},
-  clearSessionError: () => {},
-});
+const WebSocketContext = createContext<WebSocketContextType | null>(null);
 
 // Custom hook to use the WebSocket context
-export const useWebSocket = () => useContext(WebSocketContext);
+export const useWebSocket = () => {
+  const context = useContext(WebSocketContext);
+  if (!context) {
+    throw new Error('useWebSocket must be used within a WebSocketProvider');
+  }
+  return context;
+};
 
 // WebSocket provider component
 export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -48,8 +41,6 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [role, setRole] = useState<'interviewer' | 'interviewee' | null>(null);
   const [sessionError, setSessionError] = useState<string | null>(null);
-  const [pendingSessionId, setPendingSessionId] = useState<string | null>(null);
-  const [pendingRole, setPendingRole] = useState<'interviewer' | 'interviewee' | null>(null);
   const [sessionState, setSessionState] = useState<{
     code: string;
     testCases: TestCase[];
@@ -58,32 +49,6 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
   // Initialize socket connection
   useEffect(() => {
-    // Check if we're in a session URL
-    const path = window.location.pathname;
-    const sessionMatch = path.match(/\/session\/([^\/]+)/);
-    const sessionIdFromUrl = sessionMatch ? sessionMatch[1] : null;
-    
-    // If we're in a session URL but not connected to a WebSocket server,
-    // we'll simulate a session state
-    if (sessionIdFromUrl && !socket) {
-      console.log('Simulating session state for URL session:', sessionIdFromUrl);
-      
-      // Determine role based on URL
-      const isInterviewer = path.includes('/interview/');
-      const role = isInterviewer ? 'interviewer' : 'interviewee';
-      
-      // Set session state
-      setSessionId(sessionIdFromUrl);
-      setRole(role);
-      setSessionState({
-        code: '',
-        testCases: [],
-        problemStatement: '',
-      });
-      
-      return;
-    }
-    
     const newSocket = io(process.env.REACT_APP_WS_URL || 'http://localhost:5000', {
       transports: ['websocket'],
       reconnection: true,
@@ -92,55 +57,31 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     });
 
     newSocket.on('connect', () => {
+      console.log('Connected to WebSocket server');
       setIsConnected(true);
       setSessionError(null);
     });
 
     newSocket.on('connect_error', (error) => {
-      console.log('WebSocket connection error:', error);
-      setSessionError('Could not connect to the server. Using fallback mode.');
-      
-      // If we're in a session URL, simulate a session state
-      if (sessionIdFromUrl) {
-        console.log('Simulating session state for URL session:', sessionIdFromUrl);
-        
-        // Determine role based on URL
-        const isInterviewer = path.includes('/interview/');
-        const role = isInterviewer ? 'interviewer' : 'interviewee';
-        
-        // Set session state
-        setSessionId(sessionIdFromUrl);
-        setRole(role);
-        setSessionState({
-          code: '',
-          testCases: [],
-          problemStatement: '',
-        });
-      }
+      console.error('WebSocket connection error:', error);
+      setIsConnected(false);
+      setSessionError('Could not connect to the server');
     });
 
     newSocket.on('disconnect', () => {
+      console.log('Disconnected from WebSocket server');
       setIsConnected(false);
     });
 
     newSocket.on('session_error', (error) => {
-      console.log('Session error received:', error);
+      console.error('Session error:', error);
       setSessionError(error.message);
-      setSessionId(null);
-      setRole(null);
-      setPendingSessionId(null);
-      setPendingRole(null);
-      setSessionState(null);
     });
 
     newSocket.on('session_state', (state) => {
       console.log('Session state received:', state);
       setSessionId(state.sessionId);
       setRole(state.role);
-      setPendingSessionId(null);
-      setPendingRole(null);
-      
-      // Store the session state
       setSessionState({
         code: state.code || '',
         testCases: state.testCases || [],
@@ -148,20 +89,28 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       });
     });
 
-    // Listen for real-time updates
     newSocket.on('code_updated', (data) => {
-      console.log('Code update received in context:', data);
-      setSessionState(prev => prev ? { ...prev, code: data.code } : null);
+      console.log('Code update received:', data);
+      setSessionState(prev => prev ? {
+        ...prev,
+        code: data.code
+      } : null);
     });
 
     newSocket.on('test_cases_updated', (data) => {
-      console.log('Test cases update received in context:', data);
-      setSessionState(prev => prev ? { ...prev, testCases: data.testCases } : null);
+      console.log('Test cases update received:', data);
+      setSessionState(prev => prev ? {
+        ...prev,
+        testCases: data.testCases
+      } : null);
     });
 
     newSocket.on('problem_statement_updated', (data) => {
-      console.log('Problem statement update received in context:', data);
-      setSessionState(prev => prev ? { ...prev, problemStatement: data.problemStatement } : null);
+      console.log('Problem statement update received:', data);
+      setSessionState(prev => prev ? {
+        ...prev,
+        problemStatement: data.problemStatement
+      } : null);
     });
 
     setSocket(newSocket);
@@ -173,36 +122,19 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
   // Join a session
   const joinSession = (sessionId: string, role: 'interviewer' | 'interviewee') => {
-    if (socket) {
-      console.log(`Joining session: ${sessionId} as ${role}`);
-      setSessionError(null);
-      setPendingSessionId(sessionId);
-      setPendingRole(role);
-      socket.emit('join_session', { sessionId, role });
-    } else {
-      // If WebSocket is not available, simulate joining the session
-      console.log(`Simulating join session: ${sessionId} as ${role}`);
-      setSessionError(null);
-      setSessionId(sessionId);
-      setRole(role);
-      setSessionState({
-        code: '',
-        testCases: [],
-        problemStatement: '',
-      });
-    }
+    if (!socket) return;
+    console.log(`Joining session ${sessionId} as ${role}`);
+    socket.emit('join_session', { sessionId, role });
   };
 
   // Leave the current session
   const leaveSession = (sessionId: string) => {
-    if (socket) {
-      console.log(`Leaving session: ${sessionId}`);
-      socket.emit('leave_session', { sessionId });
-      setSessionId(null);
-      setRole(null);
-      setPendingSessionId(null);
-      setPendingRole(null);
-    }
+    if (!socket) return;
+    console.log(`Leaving session ${sessionId}`);
+    socket.emit('leave_session', { sessionId });
+    setSessionId(null);
+    setRole(null);
+    setSessionState(null);
   };
 
   // Clear session error
@@ -212,23 +144,32 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
   // Send code updates
   const sendCodeUpdate = (sessionId: string, code: string) => {
-    if (socket) {
-      socket.emit('code_change', { sessionId, code });
+    if (!socket || !isConnected) {
+      console.error('Cannot send code update: Socket not connected');
+      return;
     }
+    console.log('Sending code update:', { sessionId, code: code.substring(0, 50) + '...' });
+    socket.emit('code_change', { sessionId, code });
   };
 
   // Send test case updates
   const sendTestCaseUpdate = (sessionId: string, testCases: TestCase[]) => {
-    if (socket) {
-      socket.emit('test_case_change', { sessionId, testCases });
+    if (!socket || !isConnected) {
+      console.error('Cannot send test case update: Socket not connected');
+      return;
     }
+    console.log('Sending test case update:', { sessionId, testCases });
+    socket.emit('test_case_change', { sessionId, testCases });
   };
 
   // Send problem statement updates
   const sendProblemStatementUpdate = (sessionId: string, problemStatement: string) => {
-    if (socket) {
-      socket.emit('problem_statement_change', { sessionId, problemStatement });
+    if (!socket || !isConnected) {
+      console.error('Cannot send problem statement update: Socket not connected');
+      return;
     }
+    console.log('Sending problem statement update:', { sessionId, problemStatement });
+    socket.emit('problem_statement_change', { sessionId, problemStatement });
   };
 
   // Context value

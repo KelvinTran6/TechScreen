@@ -5,6 +5,7 @@ const { promisify } = require('util');
 const execAsync = promisify(exec);
 
 async function runPythonCode(code, testCases) {
+  console.log('Running Python code:', code);
   const tempDir = path.join(__dirname, 'temp');
   if (!fs.existsSync(tempDir)) {
     fs.mkdirSync(tempDir);
