@@ -112,7 +112,7 @@ const CodingEnvironment: React.FC<CodingEnvironmentProps> = ({
         
         // Check if this is a highlighted key combination
         const isHighlighted = highlightedKeyCombos.some(combo => 
-          combo.key === e.key && 
+          combo.key.toLowerCase() === e.key.toLowerCase() && 
           (combo.ctrlKey === undefined || combo.ctrlKey === e.ctrlKey) &&
           (combo.altKey === undefined || combo.altKey === e.altKey) &&
           (combo.shiftKey === undefined || combo.shiftKey === e.shiftKey) &&

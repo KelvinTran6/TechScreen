@@ -1,141 +1,91 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Box, Typography } from '@mui/material';
+import { Box, Typography, IconButton, Tabs, Tab } from '@mui/material';
 import { styled } from '@mui/material/styles';
+import KeyboardIcon from '@mui/icons-material/Keyboard';
+import CompareArrowsIcon from '@mui/icons-material/CompareArrows';
+import { ActivityItem, ActivityOverlayProps } from '../types/ActivityTypes';
+import KeyCombinations from './KeyCombinations';
+import CodeComparison from './CodeComparison';
 
-interface ActivityItem {
-  id: string;
-  type: 'keypress' | 'mouseclick';
-  key?: string;
-  x?: number;
-  y?: number;
-  target?: string;
-  button?: number;
-  timestamp: string;
-  ctrlKey?: boolean;
-  altKey?: boolean;
-  shiftKey?: boolean;
-  metaKey?: boolean;
-  isHighlighted?: boolean;
-  isRegularTyping?: boolean;
-}
-
-interface CandidateActivityOverlayProps {
-  activities: ActivityItem[];
-  onActivityExpired: (id: string) => void;
-}
-
-const KeyButton = styled(Box)(({ theme }) => ({
-  display: 'inline-flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  minWidth: '50px',
-  height: '50px',
-  margin: '0 10px',
-  padding: '0 15px',
-  borderRadius: '8px',
-  backgroundColor: 'rgba(76, 175, 80, 0.3)',
-  border: '2px solid rgba(76, 175, 80, 0.7)',
-  color: '#4CAF50',
-  fontFamily: 'Consolas, Monaco, monospace',
-  fontSize: '16px',
-  fontWeight: 'bold',
-  boxShadow: '0 4px 8px rgba(0, 0, 0, 0.3)',
-  transition: 'all 0.3s ease-out',
-  '&.highlighted': {
-    backgroundColor: 'rgba(255, 87, 34, 0.4)',
-    border: '2px solid rgba(255, 87, 34, 0.8)',
-    color: '#FF5722',
-    animation: 'pulse 1.5s infinite',
-    transform: 'scale(1.1)',
-  },
-  '@keyframes pulse': {
-    '0%': {
-      boxShadow: '0 0 0 0 rgba(255, 87, 34, 0.7)',
-    },
-    '70%': {
-      boxShadow: '0 0 0 15px rgba(255, 87, 34, 0)',
-    },
-    '100%': {
-      boxShadow: '0 0 0 0 rgba(255, 87, 34, 0)',
-    },
-  },
-}));
-
-const MouseButton = styled(Box)(({ theme }) => ({
-  display: 'inline-flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  minWidth: '50px',
-  height: '50px',
-  margin: '0 10px',
-  padding: '0 15px',
-  borderRadius: '8px',
-  backgroundColor: 'rgba(33, 150, 243, 0.3)',
-  border: '2px solid rgba(33, 150, 243, 0.7)',
-  color: '#2196F3',
-  fontFamily: 'Consolas, Monaco, monospace',
-  fontSize: '16px',
-  fontWeight: 'bold',
-  boxShadow: '0 4px 8px rgba(0, 0, 0, 0.3)',
-  transition: 'all 0.3s ease-out',
-}));
-
-const ActivityContainer = styled(Box)(({ theme }) => ({
+// Styled components
+const ActivityOverlayContainer = styled('div')<{ isDragging: boolean }>(({ theme, isDragging }) => ({
   position: 'fixed',
-  top: '50%',
-  left: '50%',
-  transform: 'translate(-50%, -50%)',
-  display: 'flex',
-  flexDirection: 'column',
-  alignItems: 'center',
-  justifyContent: 'center',
+  top: '20px',
+  right: '20px',
+  width: '400px',
+  backgroundColor: 'rgba(0, 0, 0, 0.8)',
+  borderRadius: '8px',
+  padding: '12px',
+  color: 'white',
+  fontFamily: 'monospace',
+  fontSize: '14px',
   zIndex: 1000,
-  pointerEvents: 'auto',
-  backgroundColor: 'rgba(0, 0, 0, 0.7)',
-  borderRadius: '12px',
-  padding: '16px',
-  boxShadow: '0 4px 20px rgba(0, 0, 0, 0.3)',
+  boxShadow: '0 4px 8px rgba(0, 0, 0, 0.2)',
+  cursor: isDragging ? 'grabbing' : 'grab',
   userSelect: 'none',
-  width: '500px',
-  height: '120px',
-  border: '2px solid rgba(255, 255, 255, 0.3)',
-}));
-
-const DragHandle = styled(Box)(({ theme }) => ({
-  width: '100%',
-  height: '20px',
-  marginBottom: '8px',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  cursor: 'move',
+  transition: 'box-shadow 0.2s ease',
   '&:hover': {
-    '&::before': {
-      backgroundColor: 'rgba(255, 255, 255, 0.5)',
-    }
+    boxShadow: '0 6px 12px rgba(0, 0, 0, 0.3)',
   },
-  '&::before': {
-    content: '""',
-    width: '40px',
-    height: '4px',
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
-    borderRadius: '2px',
-    transition: 'background-color 0.2s ease',
-  }
 }));
 
-const ActivityRow = styled(Box)(({ theme }) => ({
+const ActivityHeader = styled(Box)(({ theme }) => ({
   display: 'flex',
-  flexDirection: 'row',
   alignItems: 'center',
-  justifyContent: 'center',
-  flexWrap: 'wrap',
-  width: '100%',
-  height: '80px',
+  justifyContent: 'space-between',
+  marginBottom: '4px',
+  height: '20px',
   overflow: 'hidden',
 }));
 
-const CandidateActivityOverlay: React.FC<CandidateActivityOverlayProps> = ({ 
+const DragHandle = styled(Box)(({ theme }) => ({
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  width: '100%',
+  height: '20px',
+  cursor: 'grab',
+  '&::before': {
+    content: '""',
+    display: 'block',
+    width: '40px',
+    height: '4px',
+    backgroundColor: 'rgba(255, 255, 255, 0.5)',
+    borderRadius: '2px',
+    transition: 'background-color 0.2s ease',
+  },
+  '&:hover::before': {
+    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+  },
+}));
+
+const StyledTabs = styled(Tabs)(({ theme }) => ({
+  borderBottom: '1px solid rgba(255, 255, 255, 0.2)',
+  marginBottom: '12px',
+  marginTop: '0px',
+  minHeight: '36px',
+  '& .MuiTabs-indicator': {
+    backgroundColor: 'rgba(255, 255, 255, 0.7)',
+  },
+  '& .MuiTab-root': {
+    color: 'rgba(255, 255, 255, 0.7)',
+    fontSize: '12px',
+    minHeight: '36px',
+    padding: '4px 8px',
+    '&.Mui-selected': {
+      color: 'white',
+    },
+  },
+}));
+
+const StyledTab = styled(Tab)(({ theme }) => ({
+  minWidth: 'auto',
+  padding: '4px 8px',
+  fontSize: '12px',
+  minHeight: '36px',
+}));
+
+const CandidateActivityOverlay: React.FC<ActivityOverlayProps> = ({ 
   activities, 
   onActivityExpired 
 }) => {
@@ -150,100 +100,13 @@ const CandidateActivityOverlay: React.FC<CandidateActivityOverlayProps> = ({
         console.error('Failed to parse saved position:', e);
       }
     }
-    return { x: 0, y: 0 };
+    return { x: 20, y: 20 }; // Default position
   });
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const containerRef = useRef<HTMLDivElement>(null);
-  const [displayedActivities, setDisplayedActivities] = useState<ActivityItem[]>([]);
-  const globalTimerRef = useRef<NodeJS.Timeout | null>(null);
-
-  // Define highlighted key combinations
-  const highlightedKeyCombos: Array<{
-    key: string;
-    ctrlKey?: boolean;
-    altKey?: boolean;
-    shiftKey?: boolean;
-    metaKey?: boolean;
-  }> = [
-    { key: 'b', ctrlKey: true },
-    { key: 'Enter', ctrlKey: true },
-    { key: 'h', ctrlKey: true },
-    { key: 'g', ctrlKey: true },
-    { key: 'F4', altKey: true },
-    { key: 'ArrowUp', ctrlKey: true },
-    { key: 'ArrowDown', ctrlKey: true },
-    { key: 'ArrowLeft', ctrlKey: true },
-    { key: 'ArrowRight', ctrlKey: true },
-    { key: 'a', ctrlKey: true }, // Ctrl+A (Select All)
-    { key: 'c', ctrlKey: true }, // Ctrl+C (Copy)
-    { key: 'v', ctrlKey: true }, // Ctrl+V (Paste)
-    { key: 'x', ctrlKey: true }, // Ctrl+X (Cut)
-    { key: 'z', ctrlKey: true }, // Ctrl+Z (Undo)
-    { key: 'y', ctrlKey: true }, // Ctrl+Y (Redo)
-    { key: 'f', ctrlKey: true }, // Ctrl+F (Find)
-    { key: 'p', ctrlKey: true }, // Ctrl+P (Print)
-    { key: 's', ctrlKey: true }, // Ctrl+S (Save)
-    { key: 'r', ctrlKey: true }, // Ctrl+R (Refresh)
-    { key: 'l', ctrlKey: true }, // Ctrl+L (Focus URL bar)
-    { key: 't', ctrlKey: true }, // Ctrl+T (New tab)
-    { key: 'w', ctrlKey: true }, // Ctrl+W (Close tab)
-    { key: 'Tab', ctrlKey: true }, // Ctrl+Tab (Switch tabs)
-    { key: 'Home', ctrlKey: true }, // Ctrl+Home (Go to beginning)
-    { key: 'End', ctrlKey: true }, // Ctrl+End (Go to end)
-    { key: 'PageUp', ctrlKey: true }, // Ctrl+PageUp (Previous tab)
-    { key: 'PageDown', ctrlKey: true }, // Ctrl+PageDown (Next tab)
-    { key: 'Insert', ctrlKey: true }, // Ctrl+Insert (Copy)
-    { key: 'Delete', ctrlKey: true }, // Ctrl+Delete (Delete word)
-    { key: 'Backspace', ctrlKey: true }, // Ctrl+Backspace (Delete word)
-  ];
-
-  // Update displayed activities and reset the global timer whenever activities change
-  useEffect(() => {
-    // Get the most recent activities
-    const recentActivities = [...activities].slice(-5);
-    
-    // Process activities to only include highlighted key combinations
-    const processedActivities = recentActivities.reduce<ActivityItem[]>((acc, activity) => {
-      if (activity.type === 'keypress') {
-        // Check if this is a highlighted key combination
-        const isHighlighted = highlightedKeyCombos.some(combo => 
-          combo.key === activity.key && 
-          (combo.ctrlKey === undefined || combo.ctrlKey === activity.ctrlKey) &&
-          (combo.altKey === undefined || combo.altKey === activity.altKey) &&
-          (combo.shiftKey === undefined || combo.shiftKey === activity.shiftKey) &&
-          (combo.metaKey === undefined || combo.metaKey === activity.metaKey)
-        );
-        
-        // Only add the activity if it's a highlighted key combination
-        if (isHighlighted) {
-          acc.push({ ...activity, isHighlighted: true });
-        }
-      }
-      
-      return acc;
-    }, []);
-    
-    // Update displayed activities
-    setDisplayedActivities(processedActivities);
-    
-    // Reset the global timer whenever activities change
-    if (globalTimerRef.current) {
-      clearTimeout(globalTimerRef.current);
-    }
-    
-    // Set a new global timer to clear all activities after 2 seconds
-    globalTimerRef.current = setTimeout(() => {
-      // Clear all displayed activities at once
-      setDisplayedActivities([]);
-    }, 2000);
-    
-    return () => {
-      if (globalTimerRef.current) {
-        clearTimeout(globalTimerRef.current);
-      }
-    };
-  }, [activities, highlightedKeyCombos]);
+  const [activeTab, setActiveTab] = useState(0);
 
   // Save position to localStorage when it changes
   useEffect(() => {
@@ -252,140 +115,93 @@ const CandidateActivityOverlay: React.FC<CandidateActivityOverlayProps> = ({
     }
   }, [position]);
 
-  // Handle mouse down event to start dragging
-  const handleMouseDown = (e: React.MouseEvent) => {
-    // Only start dragging if the left mouse button is pressed
-    if (e.button !== 0) return;
-    
-    setIsDragging(true);
-    setDragStart({
-      x: e.clientX - position.x,
-      y: e.clientY - position.y
-    });
+  // Handle mouse events for dragging
+  const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    // Only start dragging if clicking on the header or container
+    if (e.target === containerRef.current || 
+        (e.target as HTMLElement).closest('.activity-header') ||
+        (e.target as HTMLElement).closest('.drag-handle')) {
+      setIsDragging(true);
+      setDragStart({ x: e.clientX, y: e.clientY });
+    }
   };
 
-  // Handle mouse move event to update position while dragging
-  const handleMouseMove = (e: MouseEvent) => {
-    if (!isDragging) return;
-    
-    setPosition({
-      x: e.clientX - dragStart.x,
-      y: e.clientY - dragStart.y
-    });
+  // Handle window mouse move event
+  const handleWindowMouseMove = (e: MouseEvent) => {
+    if (isDragging) {
+      const dx = e.clientX - dragStart.x;
+      const dy = e.clientY - dragStart.y;
+      setDragOffset({ x: dx, y: dy });
+    }
   };
 
-  // Handle mouse up event to stop dragging
-  const handleMouseUp = () => {
-    setIsDragging(false);
+  // Handle window mouse up event
+  const handleWindowMouseUp = () => {
+    if (isDragging) {
+      setIsDragging(false);
+      setPosition({
+        x: position.x + dragOffset.x,
+        y: position.y + dragOffset.y
+      });
+      setDragOffset({ x: 0, y: 0 });
+    }
   };
 
   // Add and remove event listeners for mouse move and mouse up
   useEffect(() => {
     if (isDragging) {
-      window.addEventListener('mousemove', handleMouseMove);
-      window.addEventListener('mouseup', handleMouseUp);
+      window.addEventListener('mousemove', handleWindowMouseMove);
+      window.addEventListener('mouseup', handleWindowMouseUp);
     }
-    
-    return () => {
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', handleMouseUp);
-    };
-  }, [isDragging, dragStart]);
 
-  // Format keyboard shortcut display
-  const formatKeyDisplay = (activity: ActivityItem) => {
-    if (activity.type !== 'keypress') return '';
-    
-    const parts = [];
-    
-    // Only add modifier keys if they're not the main key being pressed
-    if (activity.ctrlKey && activity.key !== 'Control') parts.push('Ctrl');
-    if (activity.altKey && activity.key !== 'Alt') parts.push('Alt');
-    if (activity.shiftKey && activity.key !== 'Shift') parts.push('Shift');
-    if (activity.metaKey && activity.key !== 'Meta') parts.push('Meta');
-    
-    // Add the main key
-    if (activity.key) {
-      // Format special keys
-      if (activity.key === ' ') {
-        parts.push('Space');
-      } else if (activity.key === 'Escape') {
-        parts.push('Esc');
-      } else if (activity.key === 'ArrowUp') {
-        parts.push('↑');
-      } else if (activity.key === 'ArrowDown') {
-        parts.push('↓');
-      } else if (activity.key === 'ArrowLeft') {
-        parts.push('←');
-      } else if (activity.key === 'ArrowRight') {
-        parts.push('→');
-      } else if (activity.key === 'Enter') {
-        parts.push('↵');
-      } else if (activity.key === 'Tab') {
-        parts.push('Tab');
-      } else if (activity.key === 'Backspace') {
-        parts.push('⌫');
-      } else if (activity.key === 'Delete') {
-        parts.push('⌦');
-      } else if (activity.key === 'Home') {
-        parts.push('Home');
-      } else if (activity.key === 'End') {
-        parts.push('End');
-      } else if (activity.key === 'PageUp') {
-        parts.push('PgUp');
-      } else if (activity.key === 'PageDown') {
-        parts.push('PgDn');
-      } else if (activity.key === 'Insert') {
-        parts.push('Ins');
-      } else if (activity.key === 'F1' || activity.key === 'F2' || activity.key === 'F3' || 
-                 activity.key === 'F4' || activity.key === 'F5' || activity.key === 'F6' || 
-                 activity.key === 'F7' || activity.key === 'F8' || activity.key === 'F9' || 
-                 activity.key === 'F10' || activity.key === 'F11' || activity.key === 'F12') {
-        parts.push(activity.key);
-      } else if (activity.key === 'Control') {
-        parts.push('Ctrl');
-      } else {
-        parts.push(activity.key.toUpperCase());
-      }
-    }
-    
-    return parts.join('+');
+    return () => {
+      window.removeEventListener('mousemove', handleWindowMouseMove);
+      window.removeEventListener('mouseup', handleWindowMouseUp);
+    };
+  }, [isDragging, dragStart, position, dragOffset]);
+
+  const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
+    setActiveTab(newValue);
   };
 
-  // Determine if we should use the saved position or center the overlay
-  const hasCustomPosition = position.x !== 0 || position.y !== 0;
-
   return (
-    <ActivityContainer 
+    <ActivityOverlayContainer
       ref={containerRef}
+      isDragging={isDragging}
       style={{
         transform: isDragging 
-          ? `translate(${position.x}px, ${position.y}px)` 
-          : hasCustomPosition 
-            ? `translate(${position.x}px, ${position.y}px)` 
-            : 'translate(-50%, -50%)',
-        top: isDragging || hasCustomPosition ? '0' : '50%',
-        left: isDragging || hasCustomPosition ? '0' : '50%',
+          ? `translate(${position.x + dragOffset.x}px, ${position.y + dragOffset.y}px)` 
+          : `translate(${position.x}px, ${position.y}px)`,
+        paddingTop: '4px',
       }}
+      onMouseDown={handleMouseDown}
     >
-      <DragHandle onMouseDown={handleMouseDown} />
-      <ActivityRow>
-        {displayedActivities.length > 0 ? (
-          displayedActivities.map((activity) => (
-            <KeyButton 
-              key={activity.id}
-              className={`${activity.isHighlighted ? 'highlighted' : ''}`}
-            >
-              {formatKeyDisplay(activity)}
-            </KeyButton>
-          ))
-        ) : (
-          <Typography variant="body2" sx={{ color: 'rgba(255, 255, 255, 0.7)', fontStyle: 'italic' }}>
-            Flagged Key Combinations
-          </Typography>
-        )}
-      </ActivityRow>
-    </ActivityContainer>
+      <ActivityHeader className="activity-header">
+        <DragHandle className="drag-handle" />
+      </ActivityHeader>
+
+      <StyledTabs 
+        value={activeTab} 
+        onChange={handleTabChange} 
+        aria-label="candidate activity tabs"
+        variant="fullWidth"
+      >
+        <StyledTab label="Key Combinations" />
+        <StyledTab label="Code Comparison" />
+      </StyledTabs>
+
+      {activeTab === 0 ? (
+        <KeyCombinations 
+          activities={activities} 
+          onActivityExpired={onActivityExpired} 
+        />
+      ) : (
+        <CodeComparison 
+          activities={activities} 
+          onActivityExpired={onActivityExpired} 
+        />
+      )}
+    </ActivityOverlayContainer>
   );
 };
 
