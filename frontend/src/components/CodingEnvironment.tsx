@@ -5,7 +5,6 @@ import Navbar from './Navbar';
 import ProblemDescription from './ProblemDescription';
 import CodeEditor from './CodeEditor';
 import TestResults from './TestResults';
-import ProblemTemplate from './ProblemTemplate';
 import CandidateActivityOverlay from './CandidateActivityOverlay';
 import { TestCase, TestResult, Parameter } from '../types';
 
@@ -20,11 +19,10 @@ const CodingEnvironment: React.FC<CodingEnvironmentProps> = ({
 }) => {
   const { 
     socket, 
-    sessionId: socketSessionId, 
     sessionState,
     sendCodeUpdate,
-    sendTestCaseUpdate,
-    sendProblemStatementUpdate
+    sendProblemStatementUpdate,
+    sendCandidateActivity
   } = useWebSocket();
   const [code, setCode] = useState<string>('');
   const [testCases, setTestCases] = useState<TestCase[]>([]);
@@ -395,21 +393,15 @@ Explanation: [4,-1,2,1] has the largest sum = 6.`);
       setCode(data.code);
     };
 
-    const handleTestCaseUpdate = (data: { testCases: TestCase[] }) => {
-      setTestCases(data.testCases);
-    };
-
     const handleProblemStatementUpdate = (data: { problemStatement: string }) => {
       setProblemStatement(data.problemStatement);
     };
 
     socket.on('code_updated', handleCodeUpdate);
-    socket.on('test_cases_updated', handleTestCaseUpdate);
     socket.on('problem_statement_updated', handleProblemStatementUpdate);
 
     return () => {
       socket.off('code_updated', handleCodeUpdate);
-      socket.off('test_cases_updated', handleTestCaseUpdate);
       socket.off('problem_statement_updated', handleProblemStatementUpdate);
     };
   }, [socket]);
@@ -429,23 +421,19 @@ Explanation: [4,-1,2,1] has the largest sum = 6.`);
   };
 
   const handleAddTestCase = (testCase: TestCase) => {
-    const newTestCases = [...testCases, testCase];
-    setTestCases(newTestCases);
-    sendTestCaseUpdate(sessionId, newTestCases);
+    setTestCases([...testCases, testCase]);
   };
 
   const handleUpdateTestCase = (index: number, testCase: TestCase) => {
-    const newTestCases = [...testCases];
-    newTestCases[index] = testCase;
-    setTestCases(newTestCases);
-    sendTestCaseUpdate(sessionId, newTestCases);
+    const updatedTestCases = [...testCases];
+    updatedTestCases[index] = testCase;
+    setTestCases(updatedTestCases);
   };
 
   const handleDeleteTestCase = (index: number) => {
-    const newTestCases = [...testCases];
-    newTestCases.splice(index, 1);
-    setTestCases(newTestCases);
-    sendTestCaseUpdate(sessionId, newTestCases);
+    const updatedTestCases = [...testCases];
+    updatedTestCases.splice(index, 1);
+    setTestCases(updatedTestCases);
   };
 
   const handleCodeChange = (value: string | undefined) => {
@@ -598,17 +586,6 @@ Explanation: [4,-1,2,1] has the largest sum = 6.`);
                   sendProblemStatementUpdate(sessionId, newStatement);
                 }}
               />
-              {isInterviewer && (
-                <ProblemTemplate
-                  code={code}
-                  onUpdateTestUI={(params, returnType) => {
-                    if (testResultsRef.current) {
-                      testResultsRef.current.handleUpdateTestUI(params, returnType);
-                    }
-                  }}
-                  onError={(message) => setError(message)}
-                />
-              )}
             </Box>
           </Box>
         </Box>
@@ -666,6 +643,7 @@ Explanation: [4,-1,2,1] has the largest sum = 6.`);
               onDeleteTestCase={handleDeleteTestCase}
               loading={loading}
               isInterviewer={isInterviewer}
+              code={code}
             />
           </Box>
         </Box>
@@ -696,7 +674,7 @@ Explanation: [4,-1,2,1] has the largest sum = 6.`);
       {isInterviewer && (
         <CandidateActivityOverlay 
           activities={candidateActivities}
-          onActivityExpired={(id) => {
+          onActivityExpired={(id: string) => {
             setCandidateActivities(prev => prev.filter(activity => activity.id !== id));
           }}
         />

@@ -1,11 +1,28 @@
-import React, { useState, forwardRef, useImperativeHandle } from 'react';
-import { Box, Button, TextField, Typography, Paper, Tabs, Tab, CircularProgress } from '@mui/material';
-import AddIcon from '@mui/icons-material/Add';
+import React, { useRef, useState, useEffect, forwardRef, useImperativeHandle } from 'react';
+import { Box, Button, Typography, TextField, IconButton, Paper, Tabs, Tab, CircularProgress } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import CancelIcon from '@mui/icons-material/Cancel';
-import { TestCase, TestResult, Parameter } from '../types';
 import { currentLanguageConfig } from '../utils/languageUtils';
+import useDebounce from '../hooks/useDebounce';
+
+interface Parameter {
+  name: string;
+  type: string;
+  example: string;
+}
+
+interface TestCase {
+  inputs: any[];
+  output: any;
+}
+
+interface TestResult {
+  testCase: TestCase;
+  actualOutput: any;
+  passed: boolean;
+  error?: string | null;
+}
 
 export interface TestResultsProps {
   testCases: TestCase[];
@@ -15,6 +32,7 @@ export interface TestResultsProps {
   onDeleteTestCase: (index: number) => void;
   loading: boolean;
   isInterviewer: boolean;
+  code: string;
 }
 
 export interface TestResultsRef {
@@ -30,7 +48,6 @@ const TestCaseTab: React.FC<{
   const [inputs, setInputs] = React.useState<string[]>([]);
   const [output, setOutput] = React.useState<string>('');
 
-  // Update local state when testCase changes
   React.useEffect(() => {
     setInputs(testCase.inputs.map(input => {
       if (input === null || input === undefined) return '';
@@ -46,7 +63,6 @@ const TestCaseTab: React.FC<{
     setInputs(newInputs);
     
     try {
-      // Parse each input according to its parameter type
       const parsedInputs = newInputs.map((input, i) => {
         if (input.trim() === '') return null;
         return currentLanguageConfig.parseValue(input, parameters[i].type);
@@ -275,15 +291,49 @@ const TestResults = forwardRef<TestResultsRef, TestResultsProps>(({
   onUpdateTestCase,
   onDeleteTestCase,
   loading,
-  isInterviewer
+  isInterviewer,
+  code
 }, ref) => {
   const [parameters, setParameters] = useState<Parameter[]>([]);
   const [returnType, setReturnType] = useState<string>('');
   const [activeTab, setActiveTab] = useState<number>(0);
   const [showResults, setShowResults] = useState(false);
-
-  // If code is running, automatically show the results tab
-  React.useEffect(() => {
+  const [error, setError] = useState<string | null>(null);
+  const [lastParsedSignature, setLastParsedSignature] = useState<string>('');
+  
+  // Debounce the code to avoid checking for signature changes on every keystroke
+  const debouncedCode = useDebounce(code, 1000);
+  
+  // Function to extract the function signature from code
+  const extractFunctionSignature = (code: string): string | null => {
+    try {
+      const functionRegex = /def\s+(\w+)\s*\((.*?)\)\s*->\s*(\w+)/;
+      const match = code.match(functionRegex);
+      
+      if (match) {
+        const [_, functionName, paramsStr, retType] = match;
+        return `${functionName}(${paramsStr})->${retType}`;
+      }
+      return null;
+    } catch (err) {
+      return null;
+    }
+  };
+  
+  // Check if the function signature has changed when the debounced code changes
+  useEffect(() => {
+    const currentSignature = extractFunctionSignature(debouncedCode);
+    
+    if (currentSignature && currentSignature !== lastParsedSignature) {
+      // Function signature has changed, reset parameters and return type
+      setParameters([]);
+      setReturnType('');
+      setError(null);
+    }
+  }, [debouncedCode, lastParsedSignature]);
+  
+  // Show results when loading
+  useEffect(() => {
     if (loading) {
       setShowResults(true);
     }
@@ -296,11 +346,18 @@ const TestResults = forwardRef<TestResultsRef, TestResultsProps>(({
 
   useImperativeHandle(ref, () => ({
     handleUpdateTestUI: (params: Parameter[], retType: string) => {
+      console.log('handleUpdateTestUI called with params:', params, 'and returnType:', retType);
       setParameters(params);
       setReturnType(retType);
       
-      // If no test cases exist, create a sample test case
+      // Create a signature string for comparison
+      const paramString = params.map(p => `${p.name}: ${p.type}`).join(', ');
+      const signature = `(${paramString})->${retType}`;
+      console.log('Setting lastParsedSignature to:', signature);
+      setLastParsedSignature(signature);
+      
       if (testCases.length === 0) {
+        console.log('No test cases, creating a sample test case');
         const sampleInputs = params.map(param => {
           if (!param.example) return '';
           try {
@@ -318,19 +375,106 @@ const TestResults = forwardRef<TestResultsRef, TestResultsProps>(({
     }
   }));
 
+  const parseFunctionSignature = (code: string): boolean => {
+    try {
+      console.log('Parsing function signature, current test cases:', testCases.length);
+      
+      // Clear existing test cases when parsing a new function signature
+      if (testCases.length > 0) {
+        console.log('Removing all existing test cases');
+        // Remove all test cases
+        for (let i = testCases.length - 1; i >= 0; i--) {
+          console.log('Removing test case at index:', i);
+          onDeleteTestCase(i);
+        }
+      }
+
+      // Extract function signature using regex
+      const functionRegex = /def\s+(\w+)\s*\((.*?)\)\s*->\s*(\w+)/;
+      const match = code.match(functionRegex);
+      
+      if (!match) {
+        setError('Could not find a valid function signature. Please ensure your code contains a function with a return type annotation.');
+        return false;
+      }
+      
+      const [_, functionName, paramsStr, retType] = match;
+      
+      // Store the function signature for comparison
+      const signature = `${functionName}(${paramsStr})->${retType}`;
+      setLastParsedSignature(signature);
+      
+      // Parse parameters
+      const params: Parameter[] = [];
+      if (paramsStr.trim()) {
+        const paramRegex = /(\w+):\s*(\w+)(?:\s*=\s*([^,]+))?/g;
+        let paramMatch;
+        
+        while ((paramMatch = paramRegex.exec(paramsStr)) !== null) {
+          const [_, name, type, defaultValue] = paramMatch;
+          params.push({
+            name,
+            type,
+            example: defaultValue ? defaultValue.trim() : currentLanguageConfig.typeExamples[type] || ''
+          });
+        }
+      }
+      
+      setParameters(params);
+      setReturnType(retType);
+      setError(null);
+      
+      // Create a sample test case with the parsed parameters
+      if (params.length > 0) {
+        console.log('Creating a new sample test case');
+        const sampleInputs = params.map(param => {
+          if (!param.example) return '';
+          try {
+            return JSON.parse(param.example);
+          } catch {
+            return param.example;
+          }
+        });
+        const sampleOutput = currentLanguageConfig.typeExamples[retType] ? JSON.parse(currentLanguageConfig.typeExamples[retType]) : '';
+        onAddTestCase({
+          inputs: sampleInputs,
+          output: sampleOutput
+        });
+      }
+      
+      return true;
+    } catch (err) {
+      console.error('Error parsing function signature:', err);
+      setError('Error parsing function signature. Please check your code format.');
+      return false;
+    }
+  };
+
   const handleAddTestCase = () => {
-    const emptyInputs = parameters.map(() => null);
-    onAddTestCase({
-      inputs: emptyInputs,
-      output: null
-    });
-    // Switch to the new tab
-    setActiveTab(testCases.length);
+    if (parameters.length === 0) {
+      console.log('No parameters set, parsing function signature');
+      // If no parameters are set, try to parse the function signature
+      parseFunctionSignature(code);
+    } else {
+      console.log('Parameters already set, adding a new test case');
+      // If parameters are already set, add a new test case
+      const newTestCase: TestCase = {
+        inputs: parameters.map(param => {
+          if (!param.example) return '';
+          try {
+            return JSON.parse(param.example);
+          } catch {
+            return param.example;
+          }
+        }),
+        output: currentLanguageConfig.typeExamples[returnType] ? JSON.parse(currentLanguageConfig.typeExamples[returnType]) : ''
+      };
+      onAddTestCase(newTestCase);
+    }
   };
 
   const handleDeleteTab = (index: number) => {
     onDeleteTestCase(index);
-    // If we're deleting the current tab or one before it, update the active tab
     if (activeTab >= index) {
       setActiveTab(Math.max(0, activeTab - 1));
     }
@@ -343,6 +487,14 @@ const TestResults = forwardRef<TestResultsRef, TestResultsProps>(({
       height: '100%',
       bgcolor: '#252526'
     }}>
+      {error && (
+        <Box sx={{ p: 1, bgcolor: 'rgba(244, 67, 54, 0.1)', borderBottom: '1px solid #f44336' }}>
+          <Typography sx={{ color: '#f44336', fontSize: '0.9rem' }}>
+            {error}
+          </Typography>
+        </Box>
+      )}
+      
       <Box sx={{ 
         borderBottom: '1px solid #404040',
         display: 'flex',
@@ -456,7 +608,7 @@ const TestResults = forwardRef<TestResultsRef, TestResultsProps>(({
               px: 2,
             }}
           >
-            Add Test Case
+            {parameters.length === 0 ? 'Parse Function Signature' : 'Add Test Case'}
           </Button>
         </Box>
       </Box>
@@ -469,7 +621,7 @@ const TestResults = forwardRef<TestResultsRef, TestResultsProps>(({
               fontFamily: 'Consolas, Monaco, monospace'
             }}>
               {parameters.length === 0 
-                ? 'Parse a function signature to start adding test cases.'
+                ? 'Click "Parse Function Signature" to start adding test cases.'
                 : 'No test cases yet. Click "Add Test Case" to create one.'}
             </Typography>
           </Box>

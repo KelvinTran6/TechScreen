@@ -11,6 +11,7 @@ class WebSocketServer {
     });
 
     this.sessions = new Map();
+    this.sessionTimeouts = new Map(); // Track timeouts for empty sessions
     this.setupEventHandlers();
   }
 
@@ -98,6 +99,12 @@ class WebSocketServer {
 
     // Notify other participants
     socket.to(sessionId).emit('participant_joined', { role });
+
+    // Clear any existing timeout for this session since someone is joining
+    if (this.sessionTimeouts.has(sessionId)) {
+      clearTimeout(this.sessionTimeouts.get(sessionId));
+      this.sessionTimeouts.delete(sessionId);
+    }
   }
 
   handleLeaveSession(socket, sessionId) {
@@ -109,10 +116,24 @@ class WebSocketServer {
       // Notify other participants
       socket.to(sessionId).emit('participant_left', { id: socket.id });
 
-      // Clean up empty sessions
+      // If session is empty, start a timeout before deletion
       if (session.participants.size === 0) {
-        this.sessions.delete(sessionId);
-        console.log(`Deleted empty session: ${sessionId}`);
+        // Clear any existing timeout for this session
+        if (this.sessionTimeouts.has(sessionId)) {
+          clearTimeout(this.sessionTimeouts.get(sessionId));
+        }
+
+        // Set a new timeout to delete the session after 1 minute
+        const timeout = setTimeout(() => {
+          if (this.sessions.has(sessionId) && this.sessions.get(sessionId).participants.size === 0) {
+            this.sessions.delete(sessionId);
+            this.sessionTimeouts.delete(sessionId);
+            console.log(`Deleted empty session after timeout: ${sessionId}`);
+          }
+        }, 60000); // 1 minute in milliseconds
+
+        this.sessionTimeouts.set(sessionId, timeout);
+        console.log(`Session ${sessionId} is empty. Will be deleted in 1 minute if no one joins.`);
       }
     }
   }

@@ -4,7 +4,6 @@ import { BrowserRouter as Router, Routes, Route, useLocation, Navigate, useParam
 import ProblemDescription from './components/ProblemDescription';
 import CodeEditor from './components/CodeEditor';
 import TestResults from './components/TestResults';
-import ProblemTemplate from './components/ProblemTemplate';
 import LandingPage from './components/LandingPage';
 import Navbar from './components/Navbar';
 import { TestCase, TestResult, Parameter } from './types';

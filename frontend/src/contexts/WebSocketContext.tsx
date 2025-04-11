@@ -19,6 +19,7 @@ interface WebSocketContextType {
   sendCodeUpdate: (sessionId: string, code: string) => void;
   sendTestCaseUpdate: (sessionId: string, testCases: TestCase[]) => void;
   sendProblemStatementUpdate: (sessionId: string, problemStatement: string) => void;
+  sendCandidateActivity: (sessionId: string, activityData: any) => void;
   clearSessionError: () => void;
 }
 
@@ -172,6 +173,16 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     socket.emit('problem_statement_change', { sessionId, problemStatement });
   };
 
+  // Send candidate activity updates
+  const sendCandidateActivity = (sessionId: string, activityData: any) => {
+    if (!socket || !isConnected) {
+      console.error('Cannot send candidate activity: Socket not connected');
+      return;
+    }
+    console.log('Sending candidate activity:', { sessionId, activityData });
+    socket.emit('candidate_activity', { sessionId, ...activityData });
+  };
+
   // Context value
   const value = {
     socket,
@@ -185,6 +196,7 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     sendCodeUpdate,
     sendTestCaseUpdate,
     sendProblemStatementUpdate,
+    sendCandidateActivity,
     clearSessionError,
   };
 
