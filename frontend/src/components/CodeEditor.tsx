@@ -3,26 +3,25 @@ import Editor from '@monaco-editor/react';
 import { Box, Button, Typography } from '@mui/material';
 import { PlayArrow as PlayArrowIcon } from '@mui/icons-material';
 import { useWebSocket } from '../contexts/WebSocketContext';
+import { useRecoilState } from 'recoil';
+import { codeAtom } from '../recoil';
 
 interface CodeEditorProps {
-  code: string;
-  onCodeChange: (value: string | undefined) => void;
   onRunCode: () => void;
   loading: boolean;
   sessionId: string;
 }
 
 const CodeEditor = ({
-  code,
-  onCodeChange,
   onRunCode,
   loading,
   sessionId
 }: CodeEditorProps) => {
   const { sendCodeUpdate, isConnected } = useWebSocket();
+  const [code, setCode] = useRecoilState(codeAtom);
   const lastSentCode = useRef<string>(code);
 
-  // Update lastSentCode when code prop changes
+  // Update lastSentCode when code changes
   useEffect(() => {
     lastSentCode.current = code;
   }, [code]);
@@ -30,8 +29,8 @@ const CodeEditor = ({
   const handleCodeChange = (value: string | undefined) => {
     if (!value) return;
     
-    // Call the parent's onCodeChange handler
-    onCodeChange(value);
+    // Update the Recoil atom
+    setCode(value);
     
     // Send code update through WebSocket if connected
     if (isConnected && value !== lastSentCode.current) {

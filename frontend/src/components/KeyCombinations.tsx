@@ -4,6 +4,8 @@ import { styled } from '@mui/material/styles';
 import SettingsIcon from '@mui/icons-material/Settings';
 import { ActivityItem, ActivityOverlayProps } from '../types/ActivityTypes';
 import KeyboardInterface from './KeyboardInterface';
+import { useRecoilValue } from 'recoil';
+import { candidateActivitiesAtom } from '../recoil';
 
 // Styled components
 const KeyButton = styled(Box)(({ theme }) => ({
@@ -67,10 +69,12 @@ const AddButton = styled(IconButton)(({ theme }) => ({
   },
 }));
 
-const KeyCombinations: React.FC<ActivityOverlayProps> = ({ 
-  activities, 
+const KeyCombinations: React.FC<Omit<ActivityOverlayProps, 'activities' | 'code'>> = ({ 
   onActivityExpired 
 }) => {
+  // Use Recoil atom directly
+  const activities = useRecoilValue(candidateActivitiesAtom);
+  
   const [displayedActivities, setDisplayedActivities] = useState<ActivityItem[]>([]);
   const globalTimerRef = useRef<NodeJS.Timeout | null>(null);
   const [openDialog, setOpenDialog] = useState(false);

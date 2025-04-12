@@ -4,6 +4,8 @@ import { styled } from '@mui/material/styles';
 import CompareArrowsIcon from '@mui/icons-material/CompareArrows';
 import { ActivityItem, ActivityOverlayProps } from '../types/ActivityTypes';
 import Editor from '@monaco-editor/react';
+import { useRecoilValue } from 'recoil';
+import { candidateActivitiesAtom, codeAtom } from '../recoil';
 
 // Styled components
 const CodeComparisonContainer = styled(Box)(({ theme }) => ({
@@ -32,20 +34,24 @@ const EditorContainer = styled(Box)(({ theme }) => ({
   margin: '0 2px',
 }));
 
-const CodeComparison: React.FC<ActivityOverlayProps> = ({ 
-  activities, 
-  onActivityExpired 
+const CodeComparison: React.FC<Omit<ActivityOverlayProps, 'activities' | 'code'>> = ({ 
+  onActivityExpired
 }) => {
-  const [code, setCode] = useState('# Paste in code you want to compare with');
+  const [showComparison, setShowComparison] = useState(false);
+  const [comparisonCode, setComparisonCode] = useState('');
+  
+  // Use Recoil atoms directly
+  const activities = useRecoilValue(candidateActivitiesAtom);
+  const candidateCode = useRecoilValue(codeAtom);
 
   const handleCompareCode = () => {
-    // This would be implemented later to compare the candidate's code with the pasted code
-    console.log('Comparing code:', code);
+    setShowComparison(true);
+    setComparisonCode(candidateCode || '');
   };
 
   const handleEditorChange = (value: string | undefined) => {
     if (value !== undefined) {
-      setCode(value);
+      setComparisonCode(value);
     }
   };
 
@@ -55,7 +61,7 @@ const CodeComparison: React.FC<ActivityOverlayProps> = ({
         <Editor
           height="100%"
           defaultLanguage="python"
-          value={code}
+          value={comparisonCode}
           onChange={handleEditorChange}
           theme="vs-dark"
           options={{
@@ -96,7 +102,7 @@ const CodeComparison: React.FC<ActivityOverlayProps> = ({
         startIcon={<CompareArrowsIcon />}
         onClick={handleCompareCode}
         fullWidth
-        disabled={!code.trim()}
+        disabled={!comparisonCode.trim()}
       >
         Compare Code
       </StyledButton>

@@ -16,6 +16,7 @@ export interface ActivityItem {
 }
 
 export interface ActivityOverlayProps {
-  activities: ActivityItem[];
-  onActivityExpired: (id: string) => void;
+  activities?: ActivityItem[];
+  onActivityExpired?: (id: string) => void;
+  code?: string;
 } 

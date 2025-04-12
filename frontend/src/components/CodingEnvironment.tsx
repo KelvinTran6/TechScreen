@@ -7,6 +7,19 @@ import CodeEditor from './CodeEditor';
 import TestResults from './TestResults';
 import CandidateActivityOverlay from './CandidateActivityOverlay';
 import { TestCase, TestResult, Parameter } from '../types';
+import { useRecoilState, useSetRecoilState } from 'recoil';
+import { 
+  codeAtom, 
+  testCasesAtom, 
+  testResultsAtom, 
+  problemStatementAtom, 
+  candidateActivitiesAtom,
+  loadingAtom,
+  errorAtom,
+  containerHeightAtom,
+  descriptionWidthAtom,
+  codeEditorHeightAtom
+} from '../recoil';
 
 interface CodingEnvironmentProps {
   isInterviewer: boolean;
@@ -24,14 +37,21 @@ const CodingEnvironment: React.FC<CodingEnvironmentProps> = ({
     sendProblemStatementUpdate,
     sendCandidateActivity
   } = useWebSocket();
-  const [code, setCode] = useState<string>('');
-  const [testCases, setTestCases] = useState<TestCase[]>([]);
-  const [testResults, setTestResults] = useState<TestResult[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [containerHeight, setContainerHeight] = useState(window.innerHeight - 64);
-  const [descriptionWidth, setDescriptionWidth] = useState(400);
-  const [codeEditorHeight, setCodeEditorHeight] = useState('50%');
+  
+  // Replace local state with Recoil atoms
+  const [code, setCode] = useRecoilState(codeAtom);
+  const [testCases, setTestCases] = useRecoilState(testCasesAtom);
+  const [testResults, setTestResults] = useRecoilState(testResultsAtom);
+  const [problemStatement, setProblemStatement] = useRecoilState(problemStatementAtom);
+  const [candidateActivities, setCandidateActivities] = useRecoilState(candidateActivitiesAtom);
+  const [loading, setLoading] = useRecoilState(loadingAtom);
+  const [error, setError] = useRecoilState(errorAtom);
+  const [containerHeight, setContainerHeight] = useRecoilState(containerHeightAtom);
+  const [descriptionWidth, setDescriptionWidth] = useRecoilState(descriptionWidthAtom);
+  const [codeEditorHeight, setCodeEditorHeight] = useRecoilState(codeEditorHeightAtom);
+  
+  // Keep other local state that doesn't need to be shared
+  const [isInitialized, setIsInitialized] = useState(false);
   const isResizing = useRef(false);
   const startX = useRef(0);
   const startWidth = useRef(0);
@@ -39,23 +59,6 @@ const CodingEnvironment: React.FC<CodingEnvironmentProps> = ({
   const startHeight = useRef(0);
   const isVerticalResizing = useRef(false);
   const testResultsRef = useRef<{ handleUpdateTestUI: (params: Parameter[], returnType: string) => void; } | null>(null);
-  const [problemStatement, setProblemStatement] = useState<string>('');
-  const [isInitialized, setIsInitialized] = useState(false);
-  const [candidateActivities, setCandidateActivities] = useState<Array<{
-    id: string;
-    type: 'keypress' | 'mouseclick';
-    key?: string;
-    x?: number;
-    y?: number;
-    target?: string;
-    button?: number;
-    timestamp: string;
-    ctrlKey?: boolean;
-    altKey?: boolean;
-    shiftKey?: boolean;
-    metaKey?: boolean;
-    isHighlighted?: boolean;
-  }>>([]);
   const globalTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Define key combinations to highlight
@@ -310,11 +313,11 @@ const CodingEnvironment: React.FC<CodingEnvironmentProps> = ({
       
       if (isVerticalResizing.current) {
         const delta = e.clientY - startY.current;
-        const newHeight = Math.max(startHeight.current + delta, 100);
-        setCodeEditorHeight(`${newHeight}px`);
+        const newHeight = Math.max(200, Math.min(window.innerHeight - 400, startHeight.current + delta));
+        setCodeEditorHeight(newHeight);
       } else {
         const delta = e.clientX - startX.current;
-        const newWidth = Math.max(startWidth.current + delta, 300);
+        const newWidth = Math.max(200, Math.min(600, startWidth.current + delta));
         setDescriptionWidth(newWidth);
       }
     };
@@ -333,7 +336,7 @@ const CodingEnvironment: React.FC<CodingEnvironmentProps> = ({
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
     };
-  }, []);
+  }, [setContainerHeight, setCodeEditorHeight, setDescriptionWidth]);
 
   useEffect(() => {
     if (sessionState && !isInitialized) {
@@ -417,7 +420,7 @@ Explanation: [4,-1,2,1] has the largest sum = 6.`);
     e.preventDefault();
     isVerticalResizing.current = true;
     startY.current = e.clientY;
-    startHeight.current = parseInt(codeEditorHeight);
+    startHeight.current = codeEditorHeight;
   };
 
   const handleAddTestCase = (testCase: TestCase) => {
@@ -522,162 +525,115 @@ Explanation: [4,-1,2,1] has the largest sum = 6.`);
     setError(null);
   };
 
+  // Add the handleUpdateProblem function
+  const handleUpdateProblem = (newStatement: string) => {
+    setProblemStatement(newStatement);
+    sendProblemStatementUpdate(sessionId, newStatement);
+  };
+
   return (
     <Box sx={{ 
       display: 'flex', 
       flexDirection: 'column', 
       height: '100vh',
-      bgcolor: '#1E1E1E'
+      overflow: 'hidden',
+      bgcolor: '#1E1E1E',
+      color: '#CCCCCC'
     }}>
       <CssBaseline />
       <Navbar 
         isInterviewer={isInterviewer}
       />
-      <Box
-        sx={{ 
-          display: 'flex', 
-          flex: 1,
-          overflow: 'hidden',
-          gap: 1,
-          p: 1,
-          bgcolor: '#1E1E1E',
-          height: 'calc(100vh - 64px)',
-          boxSizing: 'border-box'
+      <Box sx={{ 
+        display: 'flex', 
+        flex: 1,
+        overflow: 'hidden'
+      }}>
+        <Box sx={{ 
+          width: `${descriptionWidth}px`, 
+          minWidth: '200px',
+          maxWidth: '600px',
+          borderRight: '1px solid #404040',
+          overflow: 'hidden'
         }}>
-        <Box
-          sx={{ 
-            height: '100%', 
-            display: 'flex', 
-            flexDirection: 'column',
-            flexShrink: 0
-          }}>
-          <Box sx={{ 
-            width: descriptionWidth,
-            flex: 1,
-            position: 'relative',
-            backgroundColor: '#252526',
-            zIndex: 1,
-            overflow: 'hidden',
-            display: 'flex',
-            flexDirection: 'column',
-            border: '1px solid #404040',
-          }}>
-            <Box
-              onMouseDown={handleMouseDown}
-              sx={{
-                position: 'absolute',
-                right: 0,
-                top: 0,
-                bottom: 0,
-                width: '4px',
-                cursor: 'col-resize',
-                backgroundColor: 'transparent',
-                '&:hover': {
-                  backgroundColor: '#404040'
-                },
-              }}
-            />
-            <Box sx={{ flex: 1, overflow: 'auto', p: 2 }}>
-              <ProblemDescription
-                problemStatement={problemStatement}
-                isInterviewer={isInterviewer}
-                onUpdateProblem={(newStatement) => {
-                  setProblemStatement(newStatement);
-                  sendProblemStatementUpdate(sessionId, newStatement);
-                }}
-              />
-            </Box>
-          </Box>
+          <ProblemDescription 
+            isInterviewer={isInterviewer}
+          />
         </Box>
+        
+        {/* Horizontal resize handle */}
+        <Box
+          sx={{
+            width: '4px',
+            cursor: 'col-resize',
+            bgcolor: 'transparent',
+            '&:hover': {
+              bgcolor: 'rgba(255, 255, 255, 0.1)'
+            }
+          }}
+          onMouseDown={handleMouseDown}
+        />
+
         <Box sx={{ 
           display: 'flex', 
           flexDirection: 'column',
-          gap: 1,
-          overflow: 'hidden',
-          minWidth: 300,
-          flex: '1 1 0%'
+          flex: 1,
+          overflow: 'hidden'
         }}>
           <Box sx={{ 
-            height: codeEditorHeight,
-            overflow: 'hidden',
-            border: '1px solid #404040',
-            position: 'relative',
-            bgcolor: '#252526'
+            height: `${codeEditorHeight}px`,
+            minHeight: '200px',
+            borderBottom: '1px solid #404040',
+            overflow: 'hidden'
           }}>
-            <Box
-              onMouseDown={handleVerticalMouseDown}
-              sx={{
-                position: 'absolute',
-                left: 0,
-                right: 0,
-                bottom: 0,
-                height: '4px',
-                cursor: 'row-resize',
-                backgroundColor: 'transparent',
-                zIndex: 10,
-                '&:hover': {
-                  backgroundColor: '#404040'
-                }
-              }}
-            />
-            <CodeEditor
-              code={code}
-              onCodeChange={handleCodeChange}
+            <CodeEditor 
               onRunCode={handleRunCode}
               loading={loading}
               sessionId={sessionId}
             />
           </Box>
+
+          {/* Vertical resize handle */}
+          <Box
+            sx={{
+              height: '4px',
+              cursor: 'row-resize',
+              bgcolor: 'transparent',
+              '&:hover': {
+                bgcolor: 'rgba(255, 255, 255, 0.1)'
+              }
+            }}
+            onMouseDown={handleVerticalMouseDown}
+          />
+
           <Box sx={{ 
             flex: 1,
-            overflow: 'hidden',
-            border: '1px solid #404040',
-            bgcolor: '#252526'
+            overflow: 'hidden'
           }}>
             <TestResults 
               ref={testResultsRef}
-              testCases={testCases}
-              results={testResults}
-              onAddTestCase={handleAddTestCase}
-              onUpdateTestCase={handleUpdateTestCase}
-              onDeleteTestCase={handleDeleteTestCase}
               loading={loading}
               isInterviewer={isInterviewer}
-              code={code}
             />
           </Box>
         </Box>
       </Box>
+
+      {/* Error Snackbar */}
       <Snackbar
-        open={!!error}
+        open={error !== null}
         autoHideDuration={6000}
-        onClose={handleCloseError}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+        onClose={() => setError(null)}
+        anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
       >
-        <Alert 
-          onClose={handleCloseError} 
-          severity="error" 
-          sx={{ 
-            width: '100%',
-            bgcolor: '#2D2D2D',
-            color: '#FF6B6B',
-            '& .MuiAlert-icon': {
-              color: '#FF6B6B'
-            }
-          }}
-        >
+        <Alert onClose={() => setError(null)} severity="error" sx={{ width: '100%' }}>
           {error}
         </Alert>
       </Snackbar>
       
       {/* Candidate Activity Overlay - only visible to interviewers */}
       {isInterviewer && (
-        <CandidateActivityOverlay 
-          activities={candidateActivities}
-          onActivityExpired={(id: string) => {
-            setCandidateActivities(prev => prev.filter(activity => activity.id !== id));
-          }}
-        />
+        <CandidateActivityOverlay />
       )}
     </Box>
   );

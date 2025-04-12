@@ -6,6 +6,8 @@ import CompareArrowsIcon from '@mui/icons-material/CompareArrows';
 import { ActivityItem, ActivityOverlayProps } from '../types/ActivityTypes';
 import KeyCombinations from './KeyCombinations';
 import CodeComparison from './CodeComparison';
+import { useRecoilState, useRecoilValue } from 'recoil';
+import { candidateActivitiesAtom, codeAtom } from '../recoil';
 
 // Styled components
 const ActivityOverlayContainer = styled('div')<{ isDragging: boolean }>(({ theme, isDragging }) => ({
@@ -85,10 +87,13 @@ const StyledTab = styled(Tab)(({ theme }) => ({
   minHeight: '36px',
 }));
 
-const CandidateActivityOverlay: React.FC<ActivityOverlayProps> = ({ 
-  activities, 
-  onActivityExpired 
+const CandidateActivityOverlay: React.FC<Omit<ActivityOverlayProps, 'activities' | 'code'>> = ({ 
+  onActivityExpired
 }) => {
+  // Use Recoil atoms instead of props
+  const [activities, setActivities] = useRecoilState(candidateActivitiesAtom);
+  const code = useRecoilValue(codeAtom);
+  
   // State to track position
   const [position, setPosition] = useState(() => {
     // Try to load saved position from localStorage
@@ -164,6 +169,36 @@ const CandidateActivityOverlay: React.FC<ActivityOverlayProps> = ({
     setActiveTab(newValue);
   };
 
+  // Handle activity expiration
+  useEffect(() => {
+    if (activities.length === 0) return;
+
+    const timer = setTimeout(() => {
+      const now = Date.now();
+      const updatedActivities = activities.filter(activity => {
+        const activityTime = new Date(activity.timestamp).getTime();
+        const age = now - activityTime;
+        return age < 5000; // Keep activities for 5 seconds
+      });
+
+      if (updatedActivities.length < activities.length) {
+        // Some activities have expired
+        const expiredIds = activities
+          .filter(activity => !updatedActivities.includes(activity))
+          .map(activity => activity.id);
+
+        setActivities(updatedActivities);
+
+        // Notify parent about expired activities if callback is provided
+        if (onActivityExpired) {
+          expiredIds.forEach(id => onActivityExpired(id));
+        }
+      }
+    }, 1000);
+
+    return () => clearTimeout(timer);
+  }, [activities, onActivityExpired]);
+
   return (
     <ActivityOverlayContainer
       ref={containerRef}
@@ -192,13 +227,11 @@ const CandidateActivityOverlay: React.FC<ActivityOverlayProps> = ({
 
       {activeTab === 0 ? (
         <KeyCombinations 
-          activities={activities} 
           onActivityExpired={onActivityExpired} 
         />
       ) : (
         <CodeComparison 
-          activities={activities} 
-          onActivityExpired={onActivityExpired} 
+          onActivityExpired={onActivityExpired}
         />
       )}
     </ActivityOverlayContainer>

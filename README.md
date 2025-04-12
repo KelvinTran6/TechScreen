@@ -7,8 +7,6 @@ A real-time collaborative coding interview platform.
 - Real-time code execution
 - Test case management
 - Real-time collaboration between interviewer and interviewee
-- Modern, responsive UI
-- Dark theme optimized for coding
 - Cheat detection service
 
 ## WebSocket Implementation

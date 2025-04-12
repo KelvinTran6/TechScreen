@@ -5,34 +5,13 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import CancelIcon from '@mui/icons-material/Cancel';
 import { currentLanguageConfig } from '../utils/languageUtils';
 import useDebounce from '../hooks/useDebounce';
-
-interface Parameter {
-  name: string;
-  type: string;
-  example: string;
-}
-
-interface TestCase {
-  inputs: any[];
-  output: any;
-}
-
-interface TestResult {
-  testCase: TestCase;
-  actualOutput: any;
-  passed: boolean;
-  error?: string | null;
-}
+import { useRecoilState, useRecoilValue } from 'recoil';
+import { codeAtom, testCasesAtom, testResultsAtom, parametersAtom, returnTypeAtom } from '../recoil';
+import { Parameter, TestCase, TestResult } from '../types';
 
 export interface TestResultsProps {
-  testCases: TestCase[];
-  results: TestResult[];
-  onAddTestCase: (testCase: TestCase) => void;
-  onUpdateTestCase: (index: number, testCase: TestCase) => void;
-  onDeleteTestCase: (index: number) => void;
   loading: boolean;
   isInterviewer: boolean;
-  code: string;
 }
 
 export interface TestResultsRef {
@@ -285,17 +264,15 @@ const ResultsTab: React.FC<{
 };
 
 const TestResults = forwardRef<TestResultsRef, TestResultsProps>(({
-  testCases,
-  results,
-  onAddTestCase,
-  onUpdateTestCase,
-  onDeleteTestCase,
   loading,
-  isInterviewer,
-  code
+  isInterviewer
 }, ref) => {
-  const [parameters, setParameters] = useState<Parameter[]>([]);
-  const [returnType, setReturnType] = useState<string>('');
+  // Use Recoil atoms instead of props
+  const code = useRecoilValue(codeAtom);
+  const [testCases, setTestCases] = useRecoilState(testCasesAtom);
+  const [testResults, setTestResults] = useRecoilState(testResultsAtom);
+  const [parameters, setParameters] = useRecoilState(parametersAtom);
+  const [returnType, setReturnType] = useRecoilState(returnTypeAtom);
   const [activeTab, setActiveTab] = useState<number>(0);
   const [showResults, setShowResults] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -367,10 +344,10 @@ const TestResults = forwardRef<TestResultsRef, TestResultsProps>(({
           }
         });
         const sampleOutput = currentLanguageConfig.typeExamples[retType] ? JSON.parse(currentLanguageConfig.typeExamples[retType]) : '';
-        onAddTestCase({
+        setTestCases(prev => [...prev, {
           inputs: sampleInputs,
           output: sampleOutput
-        });
+        }]);
       }
     }
   }));
@@ -383,10 +360,7 @@ const TestResults = forwardRef<TestResultsRef, TestResultsProps>(({
       if (testCases.length > 0) {
         console.log('Removing all existing test cases');
         // Remove all test cases
-        for (let i = testCases.length - 1; i >= 0; i--) {
-          console.log('Removing test case at index:', i);
-          onDeleteTestCase(i);
-        }
+        setTestCases([]);
       }
 
       // Extract function signature using regex
@@ -436,10 +410,10 @@ const TestResults = forwardRef<TestResultsRef, TestResultsProps>(({
           }
         });
         const sampleOutput = currentLanguageConfig.typeExamples[retType] ? JSON.parse(currentLanguageConfig.typeExamples[retType]) : '';
-        onAddTestCase({
+        setTestCases(prev => [...prev, {
           inputs: sampleInputs,
           output: sampleOutput
-        });
+        }]);
       }
       
       return true;
@@ -469,12 +443,12 @@ const TestResults = forwardRef<TestResultsRef, TestResultsProps>(({
         }),
         output: currentLanguageConfig.typeExamples[returnType] ? JSON.parse(currentLanguageConfig.typeExamples[returnType]) : ''
       };
-      onAddTestCase(newTestCase);
+      setTestCases(prev => [...prev, newTestCase]);
     }
   };
 
   const handleDeleteTab = (index: number) => {
-    onDeleteTestCase(index);
+    setTestCases(prev => prev.filter((_, i) => i !== index));
     if (activeTab >= index) {
       setActiveTab(Math.max(0, activeTab - 1));
     }
@@ -578,16 +552,16 @@ const TestResults = forwardRef<TestResultsRef, TestResultsProps>(({
                 {loading && (
                   <CircularProgress size={16} sx={{ color: '#4CAF50' }} />
                 )}
-                {!loading && results.length > 0 && (
+                {!loading && testResults.length > 0 && (
                   <Typography
                     component="span"
                     sx={{
                       fontSize: '0.8rem',
                       fontWeight: 500,
-                      color: results.every(r => r.passed) ? '#4caf50' : '#f44336'
+                      color: testResults.every(r => r.passed) ? '#4caf50' : '#f44336'
                     }}
                   >
-                    ({results.filter(r => r.passed).length}/{results.length})
+                    ({testResults.filter(r => r.passed).length}/{testResults.length})
                   </Typography>
                 )}
               </Box>
@@ -627,7 +601,7 @@ const TestResults = forwardRef<TestResultsRef, TestResultsProps>(({
           </Box>
         ) : showResults ? (
           <ResultsTab 
-            results={results} 
+            results={testResults} 
             loading={loading} 
             onTestCaseClick={handleTestCaseClick}
           />
@@ -636,7 +610,7 @@ const TestResults = forwardRef<TestResultsRef, TestResultsProps>(({
             testCase={testCases[activeTab]}
             parameters={parameters}
             returnType={returnType}
-            onChange={(testCase) => onUpdateTestCase(activeTab, testCase)}
+            onChange={(testCase) => setTestCases(prev => prev.map((t, i) => i === activeTab ? testCase : t))}
           />
         )}
       </Box>

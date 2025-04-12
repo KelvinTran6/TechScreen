@@ -3,25 +3,22 @@ import { Box, Typography, TextField, Button } from '@mui/material';
 import EditIcon from '@mui/icons-material/Edit';
 import SaveIcon from '@mui/icons-material/Save';
 import CancelIcon from '@mui/icons-material/Cancel';
+import { useRecoilState } from 'recoil';
+import { problemStatementAtom } from '../recoil';
 
 interface ProblemDescriptionProps {
-  problemStatement: string;
   isInterviewer: boolean;
-  onUpdateProblem?: (newProblem: string) => void;
 }
 
 const ProblemDescription: React.FC<ProblemDescriptionProps> = ({
-  problemStatement,
-  isInterviewer,
-  onUpdateProblem
+  isInterviewer
 }) => {
   const [isEditing, setIsEditing] = useState(false);
+  const [problemStatement, setProblemStatement] = useRecoilState(problemStatementAtom);
   const [editedProblem, setEditedProblem] = useState(problemStatement);
 
   const handleSave = () => {
-    if (onUpdateProblem) {
-      onUpdateProblem(editedProblem);
-    }
+    setProblemStatement(editedProblem);
     setIsEditing(false);
   };
 
@@ -33,7 +30,7 @@ const ProblemDescription: React.FC<ProblemDescriptionProps> = ({
   return (
     <Box sx={{ 
       height: '100%', 
-      overflow: 'auto',
+      overflow: 'hidden',
       display: 'flex',
       flexDirection: 'column',
       color: '#CCCCCC'
@@ -42,9 +39,9 @@ const ProblemDescription: React.FC<ProblemDescriptionProps> = ({
         display: 'flex', 
         justifyContent: 'space-between', 
         alignItems: 'center',
-        mb: 2,
+        px: 2,
+        py: 1,
         borderBottom: '1px solid #404040',
-        pb: 1
       }}>
         <Typography 
           variant="h6" 
@@ -76,12 +73,10 @@ const ProblemDescription: React.FC<ProblemDescriptionProps> = ({
         )}
       </Box>
       <Box sx={{ 
-        p: 2,
-        bgcolor: '#1E1E1E',
-        borderRadius: 1,
-        border: '1px solid #404040',
-        flexShrink: 0,
-        flex: 1
+        flex: 1,
+        overflow: 'auto',
+        px: 2,
+        py: 1
       }}>
         {isEditing ? (
           <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', gap: 2 }}>

@@ -10,6 +10,7 @@ import { TestCase, TestResult, Parameter } from './types';
 import axios from 'axios';
 import CodingEnvironment from './components/CodingEnvironment';
 import { WebSocketProvider, useWebSocket } from './contexts/WebSocketContext';
+import { RecoilRoot } from 'recoil';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 const LOGGING_URL = process.env.REACT_APP_LOGGING_URL || 'http://localhost:5001';
@@ -153,15 +154,25 @@ const CodingEnvironmentWrapper: React.FC = () => {
 // Main App Component
 const App: React.FC = () => {
   return (
-    <Router>
-      <WebSocketProvider>
-        <CssBaseline />
-        <Routes>
-          <Route path="/" element={<LandingPage />} />
-          <Route path="/session/:sessionId" element={<CodingEnvironmentWrapper />} />
-        </Routes>
-      </WebSocketProvider>
-    </Router>
+    <RecoilRoot>
+      <Router>
+        <WebSocketProvider>
+          <CssBaseline />
+          <Box sx={{ 
+            display: 'flex', 
+            flexDirection: 'column', 
+            minHeight: '100vh',
+            height: '100vh',
+            overflow: 'hidden'
+          }}>
+            <Routes>
+              <Route path="/" element={<LandingPage />} />
+              <Route path="/session/:sessionId" element={<CodingEnvironmentWrapper />} />
+            </Routes>
+          </Box>
+        </WebSocketProvider>
+      </Router>
+    </RecoilRoot>
   );
 };
 
